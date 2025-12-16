@@ -23,7 +23,7 @@ When you click the **Render** button a presentation will be generated that inclu
 1 + 1
 ```
 
-## API 
+## API
 
 ```{r}
 pacman::p_load(
@@ -33,11 +33,16 @@ pacman::p_load(
   tidyverse,
   REDCapR,
   REDCapDM,
-  rfextras
+  rfextras,
+  gtsummary,
+  Hmisc,
+  anthroplus
 )
 ```
 
 ```{r}
+#| eval: false
+#| include: false
 # Scripts
 rfextras::load_scripts()
 
@@ -45,7 +50,117 @@ source(here::here("data", "ContaminacinAmbienta_R_2025-12-13_1143.r"))
 ```
 
 ```{r}
+#| eval: false
+#| include: false
 dataset <- redcap_data(data_path = here("data", "ContaminacinAmbienta_R_2025-12-13_1143.r"),
                        dic_path = here("data", "ContaminacinAmbientalYSaludInf_DataDictionary_2025-12-13.csv"))
+```
+
+```{r}
+#| eval: false
+#| include: false
+#| paged-print: false
+path_credential <- system.file("dev-1.credentials.txt", package = "REDCapR")
+credential  <- REDCapR::retrieve_credential_local(
+  path_credential = path_credential,
+  project_id      = 750
+)
+```
+
+## Load packages
+
+```{r}
+#| include: false
+# Define los valores directamente
+mi_uri   <- "https://redcap.upch.edu.pe/redcap_v15.5.14/API/"
+mi_token <- "B17D698CB06FFE752F053EF8CC5D45CD" 
+
+proyecto_redcap <- redcap_data(
+  uri = "https://redcap.upch.edu.pe/redcap_v15.5.14/API/",
+  token = "B17D698CB06FFE752F053EF8CC5D45CD"
+)
+
+# 2. Aplicar la transformación (AQUÍ es donde se aplican las etiquetas)
+# Por defecto convierte códigos a etiquetas (factores) y limpia checkboxes
+proyecto_procesado <- rd_transform(proyecto_redcap)
+
+# 3. Extraer tu data frame final etiquetado
+data <- proyecto_procesado$data
+
+# Verificar
+head(data)
+```
+
+```{r}
+#| include: false
+# source(here::here("scripts", "test.R"))
+data <- data[-c(79, 80), ]
+```
+
+## 
+
+```{r}
+tbl_1 <- data |>
+  dplyr::select(glucosa, trigliceridos, hdl_colesterol, colesterol_total, colegio_id) |>
+  tbl_summary(
+    by = colegio_id,
+    digits = list(all_continuous() ~ c(2, 2)),
+    label = list(
+      glucosa ~ "Glucosa en ayunas (mg/dL)",
+      trigliceridos ~ "Triglicéridos (mg/dL)",
+      hdl_colesterol ~ "LHDL-c (mg/dL)",
+      colesterol_total ~ "Colesterol total (mg/dL)"
+      )) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(
+    label = "**Caraterísticas**",
+    stat_0 = "**Total** (n = {n})",
+    stat_1 = "**Jorge Basadre - VMT**",
+    stat_2 = "**Santísima Virgen de Chapi - Pachacamac**",
+    stat_3 = "**0028 Jesus y María - La Molina**") 
+
+tbl_1
+```
+
+```{r}
+data_ant <- data |>
+  mutate(peso_promedio = rowMeans(across(c(peso_1, peso_2, peso_3)), na.rm = TRUE),
+         talla_promedio = rowMeans(across(c(talla_1, talla_2, talla_3)), na.rm = TRUE),
+         pliegue_bicipital = 
+           rowMeans(across(c(bicipital_1, bicipital_1, bicipital_1)), na.rm = TRUE),
+         
+         talla_m = talla_promedio / 100,
+         imc_valor = peso_promedio / (talla_m^2),
+         edad_anios = coalesce(edad_adolescente, 11),
+         edad_meses = edad_anios * 12)
+
+
+
+tbl_1 <- data |>
+  dplyr::select(glucosa, trigliceridos, hdl_colesterol, colesterol_total, colegio_id) |>
+  tbl_summary(
+    by = colegio_id,
+    digits = list(all_continuous() ~ c(2, 2)),
+    label = list(
+      glucosa ~ "Glucosa en ayunas (mg/dL)",
+      trigliceridos ~ "Triglicéridos (mg/dL)",
+      hdl_colesterol ~ "LHDL-c (mg/dL)",
+      colesterol_total ~ "Colesterol total (mg/dL)"
+      )) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(
+    label = "**Caraterísticas**",
+    stat_0 = "**Total** (n = {n})",
+    stat_1 = "**Jorge Basadre - VMT**",
+    stat_2 = "**Santísima Virgen de Chapi - Pachacamac**",
+    stat_3 = "**0028 Jesus y María - La Molina**") 
+
+tbl_1
 ```
 
