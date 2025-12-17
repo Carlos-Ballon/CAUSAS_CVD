@@ -94,23 +94,285 @@ head(data)
 ```{r}
 #| include: false
 # source(here::here("scripts", "test.R"))
-data <- data[-c(79, 80), ]
+data <- data[-c(2, 79, 80), ]
 ```
 
-## 
 
 ```{r}
-tbl_1 <- data |>
-  dplyr::select(glucosa, trigliceridos, hdl_colesterol, colesterol_total, colegio_id) |>
+#| include: false
+data_clear <- data |>
+  mutate(
+    sexo = case_when(
+      record_id %in% c(
+        "001 - Rihana Fabiola Ajalcriña Tejada",
+        "003 - Grace Alcabuino Hermoza",
+        "004 - Flavia Ajalcriña Tejada",
+        "010 - Yomayra Genesis De la O",
+        "013 - Yadira Romero Nacazama",
+        "014 - Saskia Zatalaya Bustos",
+        "015 - Sofia Perez Canturini",
+        "016 - Daniela Palma Cruz",
+        "018 - Areliz Chuquimbalqui Maza",
+        "020 - Domenica Figueroa Rodriguez",
+        "022 - Cielo Guadalupe Pariñas Carranza",
+        "023 - Orianka Crespin Ruiz",
+        "024 - Ghia Mujica Encizo",
+        "025 - Mia Guillen Flores",
+        "026 - Jheynny Arirama Amante",
+        "027 - Naomi Reyes Napam",
+        "031 - Briyith Amasifuen Castro",
+        "032 - Anahi Mia Anhuaman",
+        "033 - Kiara Chuquizuta Ramos",
+        "034 - Alice Matsufiji Cordova",
+        "035 - Emyly Huaranga Pobes",
+        "040 - Danna Paucar Quispe",
+        "041 - Maria Enco Santiesteban",
+        "043 - Azumi Trujillo Quilca",
+        "045 - Yamilee Torres Choceña",
+        "046 - Taewa Cachay",
+        "047 - Mia Flores Vallejos",
+        "048 - Samantha Valeria Vásquez Fernández",
+        "050 - Maylen Mariel Garcia Vilcarromero",
+        "052 - María F. Soles Castro",
+        "053 - Luana Maciel Rojas Rivera",
+        "054 - Noemi Mercedes Ruiz Grijalua",
+        "057 - Lyla Huaycama Huertas",
+        "058 - Angela Rosario Palomares Marín",
+        "059 - Anyolith Sunmi Mayta De la Cruz",
+        "060 - Yasumi Viviana Guevara Huantongori",
+        "061 - Amy Alessandra Salinas Huaccache",
+        "066 - Sara Rojas Salazar",
+        "067 - Isis Cabrera Fernandez",
+        "068 - Andrea Yanayaco Amao",
+        "069 - Francheska Quispe Sánchez",
+        "070 - Xiomara Rihana Maira Quispe Espinoza",
+        "071 - Anahi Reyna Torrejon",
+        "073 - Karen Paola Sandoval Facundo",
+        "074 - Dayana Nicole Yarasca Castillos",
+        "075 - Maryori Remigio Alfaro",
+        "076 - Nahomi Tarazona Ponce"
+      ) ~ 2,
+      record_id %in% c(
+        "002 - Percy Rojas Canchari",
+        "005 - Aldair Dayiro Contreras Cutamanca",
+        "006 - Frank Yensi Julan Pinedo",
+        "007 - Fabiano Puchuni Espinoza",
+        "008 - Maycol Fernandez Huaman",
+        "009 - Pedro Machuca Sanchez",
+        "011 - Duban Huaman Carrillo",
+        "012 - Diego Mamani Chipani",
+        "017 - Jordan Usurin Sarmiento",
+        "019 - Moises Enmanuel Ancajima Ybarra",
+        "021 - Angel de Jesus Vilela Amamsifuen",
+        "028 - Cristian Solis Veliz",
+        "029 - Caleb Casabona Vega",
+        "030 - Alessandro Tito Toscano",
+        "036 - Jann Oliver Estevan Echevarria",
+        "037 - Daniel Reyes Santi",
+        "038 - Evan Rojas Rojas",
+        "039 - Thiago Huarcaya Huaman",
+        "042 - Roy Huaron Aranda",
+        "044 - Bryan Setalaya Canales",
+        "049 - Mathias Adriano Castillo Taipe",
+        "051 - Jael Cruz Isidro",
+        "055 - Matias Córdova Hancco",
+        "056 - Erick Santiago Huaccache Gómez",
+        "062 - José María Dylan Núñez Chuchon",
+        "063 - Enrique Cruz Luque",
+        "064 - Santiago Espinoza Yucra",
+        "065 - Jesús Tapullima Chonote",
+        "072 - Ameht Paulo Quispe",
+        "077-Snaider Guillermo Davila Roman (eliminar)?"
+      ) ~ 1,
+      TRUE ~ NA_real_), 
+    sexo_factor = fct_recode(as.character(sexo), "Masculino" = "1", "Femenino" = "2") |>
+      fct_relevel("Masculino", "Femenino")) |>
+  mutate(
+    edad_anios = coalesce(edad_adolescente, 11),
+    edad_meses = edad_anios * 12,
+    peso_promedio = rowMeans(across(c(
+      peso_1, peso_2, peso_3
+    )), na.rm = TRUE),
+    talla_promedio = rowMeans(across(c(
+      talla_1, talla_2, talla_3
+    )), na.rm = TRUE),
+    talla_m = talla_promedio / 100,
+    imc = peso_promedio / (talla_m^2),
+    pliegue_bicipital = rowMeans(across(
+      c(
+        pliegue_bicipital_1,
+        pliegue_bicipital_2,
+        pliegue_bicipital_3
+      )
+    ), na.rm = TRUE),
+    pliegue_tricipital = rowMeans(across(
+      c(pliegue_triceps_1, pliegue_triceps_2, pliegue_triceps_2)
+    ), na.rm = TRUE),
+    pliegue_subescapular = rowMeans(across(
+      c(
+        pliegue_subescapular_1,
+        pliegue_subescapular_2,
+        pliegue_subescapular_3
+      )
+    ), na.rm = TRUE),
+    perimetro_cuello = rowMeans(across(
+      c(
+        perimetro_cuello_1,
+        perimetro_cuello_2,
+        perimetro_cuello_3
+      )
+    ), na.rm = TRUE),
+    perimetro_cintura = rowMeans(across(
+      c(
+        perimetro_cintura_1,
+        perimetro_cintura_2,
+        perimetro_cintura_3
+      )
+    ), na.rm = TRUE),
+    perimetro_cadera = rowMeans(across(
+      c(
+        perimetro_cadera_1,
+        perimetro_cadera_2,
+        perimetro_cadera_3
+      )
+    ), na.rm = TRUE),
+    indice_ponderal = peso_promedio / (talla_m^3),
+    indice_cintura_talla = perimetro_cintura / talla_promedio,
+    indice_cintura_cadera = perimetro_cintura / perimetro_cadera,
+    
+    # 1. Sumatoria de pliegues (TR + SE)
+    suma_pliegues = pliegue_tricipital + pliegue_subescapular,
+    
+    # 2. Estimación del % de Grasa Corporal (%GC) - Ecuación de Slaughter
+    # Nota: Se usa -4.4 para Varones y -3.2 a -4.2 para Mujeres según maduración
+    grasa_boileau = case_when(
+      sexo_factor == "Masculino" ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.4,
+      sexo_factor == "Femenino"  ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.2,
+      TRUE ~ NA_real_
+    ),
+    
+    # 3. Masa Grasa en Kilogramos
+    masa_grasa_kg_boileau = (grasa_boileau / 100) * peso_promedio,
+    
+    grasa_slaughet = case_when(
+      sexo_factor == "Masculino" ~ 0.783 * suma_pliegues + 1.6,
+      sexo_factor == "Femenino"  ~ 0.546 * suma_pliegues + 9.7,
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_slaughet = (grasa_slaughet / 100) * peso_promedio,
+    
+    # 2. Variable de sexo codificada para Deurenberg (Hombres=1, Mujeres=0)
+    sexo_deurenberg = case_when(
+      sexo == 1 ~ 1,
+      sexo == 2 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    
+    grasa_deurenberg = (1.51 * imc) - (0.70 * edad_anios) - (3.6 * sexo_deurenberg) + 1.4,
+    masa_grasa_kg_deurenberg = (grasa_deurenberg / 100) * peso_promedio,
+    
+    grasa_ict = case_when(
+      sexo == 1 ~ 9.775 + (0.415 * suma_pliegues) + (35.084 * indice_cintura_talla) -
+        (0.828 * edad_anios),
+      sexo == 2 ~ 8.608 + (0.291 * suma_pliegues) + (38.893 * indice_cintura_talla) - 
+        (0.176 * edad_anios),
+      TRUE ~ NA_real_
+    ), 
+    masa_grasa_kg_ict = (grasa_ict / 100) * peso_promedio,
+    
+    grasa_ip = case_when(
+      sexo == 1 ~ 20.720 + (0.492 * suma_pliegues) + (0.354 * indice_ponderal) - 
+        (0.923 * edad_anios),
+      sexo == 2 ~ 16.087 + (0.306 * suma_pliegues) + (0.818 * indice_ponderal) - 
+        (0.300 * edad_anios),
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_ip = (grasa_ip / 100) * peso_promedio,
+  
+    z_scores = anthroplus_zscores(
+      sex = sexo,
+      age_in_months = edad_meses,
+      weight_in_kg = peso_promedio,
+      height_in_cm = talla_promedio
+    )
+  ) |> 
+  tidyr::unpack(z_scores) |>
+  mutate(
+    zbfa_dx = case_when(
+      zbfa > 2 ~ "Obesidad",
+      zbfa > 1 ~ "Sobrepeso",
+      zbfa < -2 ~ "Delgadez",
+      zbfa < -3 ~ "Delgadez Severa",
+      TRUE      ~ "Normal"
+    ),
+    zhfa_dx = case_when(
+      zhfa < -3 ~ "Talla baja severa",
+      zhfa < -2 ~ "Talla baja (Stunting)",
+      zhfa > 3  ~ "Talla muy alta (revisar)", 
+      is.na(zhfa) ~ "Dato faltante",
+      TRUE      ~ "Talla Normal"
+    ),
+    
+    dinamometria = rowMeans(across(
+      c(
+        dinamo_1,
+        dinamo_2,
+        dinamo_3,
+        dinamo_max
+      )
+    ), na.rm = TRUE),
+    
+    PAS = rowMeans(across(
+      c(
+        pas_1,
+        pas_2,
+        pas_3
+      )
+    ), na.rm = TRUE),
+    
+    PAD = rowMeans(across(
+      c(
+        pad_1,
+        pad_2,
+        pad_3
+      )
+    ), na.rm = TRUE),
+    
+    pulso = rowMeans(across(
+      c(
+        pulso_1,
+        pulso_2,
+        pulso_3
+      )
+    ), na.rm = TRUE),
+    
+    cluster = case_match(
+      colegio_id, 
+      c("Colegio Jorge Basadre - VMT", "Colegio Santísima Virgen de Chapi - Pachacamac") ~
+        "Cluster 1",
+      "Colegio 0028 Jesus y María - La Molina" ~ "Cluster 2")
+  )
+```
+
+## Tabla 1. Biomarcadores
+
+```{r}
+tbl_1 <- data_clear |>
+  dplyr::select(
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso, cluster) |>
   tbl_summary(
-    by = colegio_id,
+    by = cluster,
     digits = list(all_continuous() ~ c(2, 2)),
     label = list(
       glucosa ~ "Glucosa en ayunas (mg/dL)",
       trigliceridos ~ "Triglicéridos (mg/dL)",
-      hdl_colesterol ~ "LHDL-c (mg/dL)",
-      colesterol_total ~ "Colesterol total (mg/dL)"
-      )) |>
+      hdl_colesterol ~ "HDL-c (mg/dL)",
+      colesterol_total ~ "Colesterol total (mg/dL)",
+      PAS ~ "Presión arterial sistólica (mmHg)",
+      PAD ~ "Presión arterial diastólica (mmHg)",
+      pulso ~ "Frecuencia cardíaca (latidos por minuto)"
+      ),
+    missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
@@ -118,38 +380,37 @@ tbl_1 <- data |>
   modify_header(
     label = "**Caraterísticas**",
     stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Jorge Basadre - VMT**",
-    stat_2 = "**Santísima Virgen de Chapi - Pachacamac**",
-    stat_3 = "**0028 Jesus y María - La Molina**") 
+    stat_1 = "**Cluster 1** (n = {n})",
+    stat_2 = "**Cluster 2** (n = {n})") |>
+  modify_caption(caption = "**Tabla 1. Biomarcadores** N = {N}")
 
 tbl_1
 ```
 
+## Tabla 2. Antropometría
+
 ```{r}
-data_ant <- data |>
-  mutate(peso_promedio = rowMeans(across(c(peso_1, peso_2, peso_3)), na.rm = TRUE),
-         talla_promedio = rowMeans(across(c(talla_1, talla_2, talla_3)), na.rm = TRUE),
-         pliegue_bicipital = 
-           rowMeans(across(c(bicipital_1, bicipital_1, bicipital_1)), na.rm = TRUE),
-         
-         talla_m = talla_promedio / 100,
-         imc_valor = peso_promedio / (talla_m^2),
-         edad_anios = coalesce(edad_adolescente, 11),
-         edad_meses = edad_anios * 12)
-
-
-
-tbl_1 <- data |>
-  dplyr::select(glucosa, trigliceridos, hdl_colesterol, colesterol_total, colegio_id) |>
+tbl_2 <- data_clear |>
+  dplyr::select(
+    sexo_factor, edad_anios, peso_promedio, talla_m, peso_promedio, imc, 
+    pliegue_bicipital, pliegue_tricipital, pliegue_subescapular, perimetro_cuello,
+    cluster) |>
   tbl_summary(
-    by = colegio_id,
-    digits = list(all_continuous() ~ c(2, 2)),
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
+    statistic = list(all_categorical() ~"{n} ({p}%)"),
     label = list(
-      glucosa ~ "Glucosa en ayunas (mg/dL)",
-      trigliceridos ~ "Triglicéridos (mg/dL)",
-      hdl_colesterol ~ "LHDL-c (mg/dL)",
-      colesterol_total ~ "Colesterol total (mg/dL)"
-      )) |>
+      sexo_factor	~ "Sexo",
+      edad_anios ~ "Edad (años)",
+      peso_promedio ~ "Peso (Kg)",
+      talla_m	~ "Talla (metros)",
+      imc ~ "IMC",
+      pliegue_bicipital	~ "Pliegue bicipital (mm)",
+      pliegue_tricipital ~ "Pliegue tricipital (mm)",
+      pliegue_subescapular ~ "Pliegue subescapular (mm)",
+      perimetro_cuello ~ "Perímetro del cuello (cm)"
+      ), 
+    missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
@@ -157,10 +418,92 @@ tbl_1 <- data |>
   modify_header(
     label = "**Caraterísticas**",
     stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Jorge Basadre - VMT**",
-    stat_2 = "**Santísima Virgen de Chapi - Pachacamac**",
-    stat_3 = "**0028 Jesus y María - La Molina**") 
+    stat_1 = "**Cluster 1** (n = {n})",
+    stat_2 = "**Cluster 2** (n = {n})") |>
+  modify_caption(caption = "**Tabla 2. Antropometría** N = {N}")
 
-tbl_1
+tbl_2
 ```
 
+## Tabla 3. Grasa corporal
+
+```{r}
+tbl_3 <- data_clear |>
+  dplyr::select(
+    perimetro_cintura, perimetro_cadera, indice_cintura_cadera, grasa_boileau, 
+    grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, zbfa_dx, zhfa_dx, 
+    dinamometria, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
+    statistic = list(all_categorical() ~"{n} ({p}%)"),
+    label = list(
+      perimetro_cintura	~ "Perímetro de cintura (cm)",
+      perimetro_cadera	~ "Perímetro de cadera (cm)",
+      indice_cintura_cadera	~ "ICC",
+      grasa_boileau ~ "%GC Boileau et al. (1985)",
+      grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
+      grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
+      grasa_ict ~ "%GC índice cintura talla",
+      grasa_ip ~ "%GC índice ponderal",
+      zbfa_dx ~ "IMC para la edad",
+      zhfa_dx ~ "Talla para la edad",
+      dinamometria ~ "Dinamometría"
+      ),
+    missing = "no") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(
+    label = "**Caraterísticas**",
+    stat_0 = "**Total** (n = {n})",
+    stat_1 = "**Cluster 1** (n = {n})",
+    stat_2 = "**Cluster 2** (n = {n})") |>
+  modify_caption(caption = "**Tabla 3. Grasa corporal** N = {N}")
+
+tbl_3
+```
+
+##
+
+```{r}
+tbl_4 <- data_clear |>
+  dplyr::select(
+    estado_civil_pariente, estad_civil_pariente, nivel_educativo_pariente,
+    situacion_laboral_pariente, laboral_pariente_1, sit_economica_1, sit_economica_2,
+    sit_economica_3, seguro_de_salud_adolescente, lactancia_materna, 
+    
+    
+    cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
+    statistic = list(all_categorical() ~"{n} ({p}%)"),
+    label = list(
+      perimetro_cintura	~ "Perímetro de cintura (cm)",
+      perimetro_cadera	~ "Perímetro de cadera (cm)",
+      indice_cintura_cadera	~ "ICC",
+      grasa_boileau ~ "%GC Boileau et al. (1985)",
+      grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
+      grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
+      grasa_ict ~ "%GC índice cintura talla",
+      grasa_ip ~ "%GC índice ponderal",
+      zbfa_dx ~ "IMC para la edad",
+      zhfa_dx ~ "Talla para la edad",
+      dinamometria ~ "Dinamometría"
+      ),
+    missing = "no") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(
+    label = "**Caraterísticas**",
+    stat_0 = "**Total** (n = {n})",
+    stat_1 = "**Cluster 1** (n = {n})",
+    stat_2 = "**Cluster 2** (n = {n})") |>
+  modify_caption(caption = "**Tabla 3. Grasa corporal** N = {N}")
+
+tbl_4
+```
