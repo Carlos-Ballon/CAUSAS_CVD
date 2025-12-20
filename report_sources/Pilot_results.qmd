@@ -23,7 +23,7 @@ When you click the **Render** button a presentation will be generated that inclu
 1 + 1
 ```
 
-## API
+## Load packages
 
 ```{r}
 pacman::p_load(
@@ -36,45 +36,17 @@ pacman::p_load(
   rfextras,
   gtsummary,
   Hmisc,
-  anthroplus
+  anthroplus,
+  rspiro
 )
+
+source(here::here("scripts", "PAQ-C_item_9.R"))
 ```
 
-```{r}
-#| eval: false
-#| include: false
-# Scripts
-rfextras::load_scripts()
-
-source(here::here("data", "ContaminacinAmbienta_R_2025-12-13_1143.r"))
-```
-
-```{r}
-#| eval: false
-#| include: false
-dataset <- redcap_data(data_path = here("data", "ContaminacinAmbienta_R_2025-12-13_1143.r"),
-                       dic_path = here("data", "ContaminacinAmbientalYSaludInf_DataDictionary_2025-12-13.csv"))
-```
-
-```{r}
-#| eval: false
-#| include: false
-#| paged-print: false
-path_credential <- system.file("dev-1.credentials.txt", package = "REDCapR")
-credential  <- REDCapR::retrieve_credential_local(
-  path_credential = path_credential,
-  project_id      = 750
-)
-```
-
-## Load packages
+## Import data
 
 ```{r}
 #| include: false
-# Define los valores directamente
-mi_uri   <- "https://redcap.upch.edu.pe/redcap_v15.5.14/API/"
-mi_token <- "B17D698CB06FFE752F053EF8CC5D45CD" 
-
 proyecto_redcap <- redcap_data(
   uri = "https://redcap.upch.edu.pe/redcap_v15.5.14/API/",
   token = "B17D698CB06FFE752F053EF8CC5D45CD"
@@ -87,9 +59,13 @@ proyecto_procesado <- rd_transform(proyecto_redcap)
 # 3. Extraer tu data frame final etiquetado
 data <- proyecto_procesado$data
 
+source(here::here("scripts", "test.R"))
+
 # Verificar
 head(data)
 ```
+
+## Process data
 
 ```{r}
 #| include: false
@@ -97,11 +73,12 @@ head(data)
 data <- data[-c(2, 79, 80), ]
 ```
 
-
 ```{r}
 #| include: false
 data_clear <- data |>
   mutate(
+    
+    # Sexo
     sexo = case_when(
       record_id %in% c(
         "001 - Rihana Fabiola Ajalcriña Tejada",
@@ -186,91 +163,116 @@ data_clear <- data |>
       ) ~ 1,
       TRUE ~ NA_real_), 
     sexo_factor = fct_recode(as.character(sexo), "Masculino" = "1", "Femenino" = "2") |>
-      fct_relevel("Masculino", "Femenino")) |>
-  mutate(
+      fct_relevel("Masculino", "Femenino"),
+    
+    # Edad
     edad_anios = coalesce(edad_adolescente, 11),
     edad_meses = edad_anios * 12,
+    
+    # Peso
     peso_promedio = rowMeans(across(c(
       peso_1, peso_2, peso_3
     )), na.rm = TRUE),
+    
+    # Talla
     talla_promedio = rowMeans(across(c(
       talla_1, talla_2, talla_3
     )), na.rm = TRUE),
     talla_m = talla_promedio / 100,
-    imc = peso_promedio / (talla_m^2),
+    
+    # Pliegues
     pliegue_bicipital = rowMeans(across(
       c(
         pliegue_bicipital_1,
         pliegue_bicipital_2,
         pliegue_bicipital_3
       )
-    ), na.rm = TRUE),
+    ), na.rm = TRUE), 
+    
     pliegue_tricipital = rowMeans(across(
-      c(pliegue_triceps_1, pliegue_triceps_2, pliegue_triceps_2)
-    ), na.rm = TRUE),
+      c(
+        pliegue_triceps_1, 
+        pliegue_triceps_2, 
+        pliegue_triceps_3
+      )
+    ), na.rm = TRUE), 
+    
     pliegue_subescapular = rowMeans(across(
       c(
         pliegue_subescapular_1,
         pliegue_subescapular_2,
         pliegue_subescapular_3
       )
-    ), na.rm = TRUE),
+    ), na.rm = TRUE), 
+    
+    # Perimetros
     perimetro_cuello = rowMeans(across(
       c(
-        perimetro_cuello_1,
-        perimetro_cuello_2,
+        perimetro_cuello_1, 
+        perimetro_cuello_2, 
         perimetro_cuello_3
       )
     ), na.rm = TRUE),
+    
     perimetro_cintura = rowMeans(across(
       c(
         perimetro_cintura_1,
         perimetro_cintura_2,
         perimetro_cintura_3
       )
-    ), na.rm = TRUE),
+    ), na.rm = TRUE), 
+    
     perimetro_cadera = rowMeans(across(
       c(
-        perimetro_cadera_1,
-        perimetro_cadera_2,
+        perimetro_cadera_1, 
+        perimetro_cadera_2, 
         perimetro_cadera_3
       )
-    ), na.rm = TRUE),
+    ), na.rm = TRUE), 
+    
+    # Indices
+    imc = peso_promedio / (talla_m^2),
     indice_ponderal = peso_promedio / (talla_m^3),
     indice_cintura_talla = perimetro_cintura / talla_promedio,
     indice_cintura_cadera = perimetro_cintura / perimetro_cadera,
     
-    # 1. Sumatoria de pliegues (TR + SE)
+    # Sumatoria de pliegues (TR + SE)
     suma_pliegues = pliegue_tricipital + pliegue_subescapular,
     
-    # 2. Estimación del % de Grasa Corporal (%GC) - Ecuación de Slaughter
-    # Nota: Se usa -4.4 para Varones y -3.2 a -4.2 para Mujeres según maduración
+    # Estimación del % de Grasa Corporal (%GC) - Ecuación de Boileau et al. (1985)
     grasa_boileau = case_when(
       sexo_factor == "Masculino" ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.4,
       sexo_factor == "Femenino"  ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.2,
       TRUE ~ NA_real_
     ),
     
-    # 3. Masa Grasa en Kilogramos
+    # Masa Grasa en Kilogramos
     masa_grasa_kg_boileau = (grasa_boileau / 100) * peso_promedio,
     
+    # Estimación del %GC - Ecuación de Slaughetr et al. (1988)
     grasa_slaughet = case_when(
       sexo_factor == "Masculino" ~ 0.783 * suma_pliegues + 1.6,
       sexo_factor == "Femenino"  ~ 0.546 * suma_pliegues + 9.7,
       TRUE ~ NA_real_
     ),
+    
+    # Masa Grasa en Kilogramos
     masa_grasa_kg_slaughet = (grasa_slaughet / 100) * peso_promedio,
     
-    # 2. Variable de sexo codificada para Deurenberg (Hombres=1, Mujeres=0)
+    # Variable de sexo codificada para Deurenberg (Hombres=1, Mujeres=0)
     sexo_deurenberg = case_when(
       sexo == 1 ~ 1,
       sexo == 2 ~ 0,
       TRUE ~ NA_real_
     ),
     
+    # Estimación del %GC - Ecuación de Deuremberg et al.(1991)
     grasa_deurenberg = (1.51 * imc) - (0.70 * edad_anios) - (3.6 * sexo_deurenberg) + 1.4,
+    
+    # Masa Grasa en Kilogramos
     masa_grasa_kg_deurenberg = (grasa_deurenberg / 100) * peso_promedio,
     
+    # Estimación del %GC - Ecuación 1 de Urra et al. (2021)
     grasa_ict = case_when(
       sexo == 1 ~ 9.775 + (0.415 * suma_pliegues) + (35.084 * indice_cintura_talla) -
         (0.828 * edad_anios),
@@ -278,8 +280,11 @@ data_clear <- data |>
         (0.176 * edad_anios),
       TRUE ~ NA_real_
     ), 
+    
+    # Masa Grasa en Kilogramos
     masa_grasa_kg_ict = (grasa_ict / 100) * peso_promedio,
     
+    # Estimación del %GC - Ecuación 2 de Urra et al. (2021)
     grasa_ip = case_when(
       sexo == 1 ~ 20.720 + (0.492 * suma_pliegues) + (0.354 * indice_ponderal) - 
         (0.923 * edad_anios),
@@ -287,8 +292,11 @@ data_clear <- data |>
         (0.300 * edad_anios),
       TRUE ~ NA_real_
     ),
+    
+    # Masa Grasa en Kilogramos
     masa_grasa_kg_ip = (grasa_ip / 100) * peso_promedio,
-  
+    
+    # Z-Scores
     z_scores = anthroplus_zscores(
       sex = sexo,
       age_in_months = edad_meses,
@@ -313,15 +321,10 @@ data_clear <- data |>
       TRUE      ~ "Talla Normal"
     ),
     
-    dinamometria = rowMeans(across(
-      c(
-        dinamo_1,
-        dinamo_2,
-        dinamo_3,
-        dinamo_max
-      )
-    ), na.rm = TRUE),
+    # Dinamometria
+    dinamometria = pmax(dinamo_1, dinamo_2, dinamo_3, dinamo_max, na.rm = TRUE),
     
+    # Presión arterial y frecuencia cardíaca
     PAS = rowMeans(across(
       c(
         pas_1,
@@ -346,6 +349,192 @@ data_clear <- data |>
       )
     ), na.rm = TRUE),
     
+    # Depression
+    across(
+      sintomas_depresivos_1:sintomas_depresivos_9,
+      ~ case_match(
+        .x,
+        "Nunca" ~ 0,
+        "Varios días" ~ 1,
+        "Más de la mitad de los días" ~ 2,
+        "Casi todos los días" ~ 3
+      )
+    ),
+    
+    PHQ_9 = rowSums(across(sintomas_depresivos_1:sintomas_depresivos_9), na.rm = TRUE),
+    
+    depresion = case_when(
+      PHQ_9 <= 4 ~ "Mínima",
+      PHQ_9 >= 5 & PHQ_9 <= 9 ~ "Leve",
+      PHQ_9 >= 10 & PHQ_9 <= 14 ~ "Moderada",
+      PHQ_9 >= 15 & PHQ_9 <= 19 ~ "Moderadamente severa",
+      PHQ_9 >= 20 ~ "Severa",
+      TRUE ~ NA_character_) |>
+      fct_relevel(
+        "Mínima", "Leve", "Moderada", "Moderadamente severa", "Severa"),
+    
+    # Ansiedad
+    across(
+      sintomas_ansiedad_1:sintomas_ansiedad_10,
+      ~ case_match(
+        .x,
+        "Nunca" ~ 0,
+        "Ocasionalmente" ~ 1,
+        "Mitad del tiempo" ~ 2,
+        "La mayor parte del tiempo" ~ 3,
+        "Todo el tiempo" ~ 4
+      )
+    ),
+    
+    GAD_7 = rowSums(across(sintomas_ansiedad_1:sintomas_ansiedad_10), na.rm = TRUE),
+    
+    ansiedad = case_when(
+      GAD_7 <= 4 ~ "Mínima",
+      GAD_7 >= 5 & GAD_7 <= 9 ~ "Leve",
+      GAD_7 >= 10 & GAD_7 <= 14 ~ "Moderada",
+      GAD_7 >= 15 ~ "Severa",
+      TRUE ~ NA_character_) |>
+      fct_relevel(
+        "Mínima", "Leve", "Moderada", "Severa"),
+  
+    # Nutricion
+    across(
+      starts_with("nutricion") & 
+        !all_of(c("nutricion_3", "nutricion_8", "nutricion_14", "nutricion_18", "nutricion_21")),
+      ~ case_match(
+        .x,
+        "Verdadero" ~ 1,
+        "Falso" ~ 0,
+        "Nunca" ~ NA_real_,
+        .default = NA_real_
+      )
+    ),
+    across(
+      all_of(c("nutricion_3", "nutricion_8", "nutricion_14", "nutricion_18", "nutricion_21")),
+      ~ case_match(
+        .x,
+        "Verdadero" ~ 0,
+        "Falso" ~ 1,
+        "Nunca" ~ NA_real_,
+        .default = NA_real_
+      )
+    ))
+
+data_clear <- data_clear |>
+  rowwise() |>
+  mutate(
+    
+    # Contar cuántas respuestas saludables (1s) obtuvo el sujeto
+    n_saludables = sum(c_across(starts_with("nutricion")), na.rm = TRUE),
+    
+    # Contar cuántas preguntas respondió (excluyendo NAs y "No aplicable")
+    n_completados = sum(!is.na(c_across(starts_with("nutricion")))),
+    
+    # Aplicar la fórmula de ajuste del manual
+    afhc_score = n_saludables * (23 / n_completados)) |>
+  ungroup()
+
+data_clear <- data_clear |>
+  mutate(   
+    
+    categoria_afhc = if_else(afhc_score >= 11, "Saludable", "No saludable"),
+    
+    # PAQ-C
+    across(
+    c(paqc_1, paqc_2, paqc_3, paqc_4, paqc_5, paqc_6, paqc_7), ~ as.numeric(.x)),
+    
+    d1 = obtener_puntaje_dia(
+      paqc_8_1_ninguna,
+      paqc_8_1_a_veces,
+      paqc_8_1_regular,
+      paqc_8_1_frecuente,
+      paqc_8_1_muy_frecuente
+    ), 
+    d2 = obtener_puntaje_dia(
+      paqc_8_2_ninguna,
+      paqc_8_2_a_veces,
+      paqc_8_2_regular,
+      paqc_8_2_frecuente,
+      paqc_8_2_muy_frecuente
+    ), 
+    d3 = obtener_puntaje_dia(
+      paqc_8_3_ninguna,
+      paqc_8_3_a_veces,
+      paqc_8_3_regular,
+      paqc_8_3_frecuente,
+      paqc_8_3_muy_frecuente
+    ), 
+    d4 = obtener_puntaje_dia(
+      paqc_8_4_ninguna,
+      paqc_8_4_a_veces,
+      paqc_8_4_regular,
+      paqc_8_4_frecuente,
+      paqc_8_4_muy_frecuente
+    ), 
+    d5 = obtener_puntaje_dia(
+      paqc_8_5_ninguna,
+      paqc_8_5_a_veces,
+      paqc_8_5_regular,
+      paqc_8_5_frecuente,
+      paqc_8_5_muy_frecuente
+    ), 
+    d6 = obtener_puntaje_dia(
+      paqc_8_6_ninguna,
+      paqc_8_6_a_veces,
+      paqc_8_6_regular,
+      paqc_8_6_frecuente,
+      paqc_8_6_muy_frecuente
+    ), 
+    d7 = obtener_puntaje_dia(
+      paqc_8_7_ninguna,
+      paqc_8_7_a_veces,
+      paqc_8_7_regular,
+      paqc_8_7_frecuente,
+      paqc_8_7_muy_frecuente
+    ), 
+    
+    paq_item9_score = rowMeans(across(c(d1, d2, d3, d4, d5, d6, d7)), na.rm = TRUE),
+    
+    paqc_final_score = rowMeans(across(c(
+      paqc_1, paqc_2, paqc_3, paqc_4, paqc_5, paqc_6, paqc_7, paq_item9_score
+    )), na.rm = TRUE),
+    
+    paqc_dx = case_when(
+      paqc_final_score <= 1 ~ "Muy sedentario",
+      paqc_final_score >= 2 & paqc_final_score <= 3 ~ "Moderadamente activo",
+      paqc_final_score >= 4 & paqc_final_score <= 5 ~ "Muy activo"),
+    
+    # FVC
+    fvc_maximo = pmax(
+      fvc, fvc_2, fvc_3, fvc_4, fvc_5, fvc_6, fvc_7, fvc_8, na.rm = TRUE),
+    
+    # FEV1
+    fev1_maximo = pmax(
+      fev1, fev1_2, fev1_3, fev1_4, fev1_5, fev1_6, fev1_7, fev1_8, na.rm = TRUE),
+    
+    # PEF
+    pef_maximo = pmax(
+      pef, pef_2, pef_3, pef_4, pef_5, pef_6, pef_7, pef_8, na.rm = TRUE),
+    
+    # FEV3
+    fev3_maximo = pmax(
+      fev3, fev3_2, fev3_3, fev3_4, fev3_5, fev3_6, fev3_7, fev3_8, na.rm = TRUE),
+    
+    # FEV6
+    fev6_maximo = pmax(
+      fev6, fev6_2, fev6_3, fev6_4, fev6_5, fev6_6, fev6_7, fev6_8, na.rm = TRUE),
+    
+    # Calcular el índice FEV1/FVC
+    fev1_fvc_ratio = (fev1_maximo / fvc_maximo) * 100,
+    
+    interpretacion_espiro = case_when(
+      fev1_fvc_ratio < 80 ~ "Posible Obstrucción",
+      fev1_fvc_ratio >= 80 & fvc_maximo < 80 ~ "Posible Restricción",
+      fev1_fvc_ratio >= 80 ~ "Normal",
+      TRUE ~ NA_character_
+    ),
+    
+    # Cluster de PM2.5
     cluster = case_match(
       colegio_id, 
       c("Colegio Jorge Basadre - VMT", "Colegio Santísima Virgen de Chapi - Pachacamac") ~
