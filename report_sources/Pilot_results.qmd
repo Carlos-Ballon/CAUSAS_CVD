@@ -4,28 +4,10 @@ format: pptx
 editor: source
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
-
-## Bullets
-
-When you click the **Render** button a document will be generated that includes:
-
--   Content authored with markdown
--   Output from executable code
-
-## Code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
-
-```{r}
-1 + 1
-```
-
 ## Load packages
 
 ```{r}
+# Packages
 pacman::p_load(
   rio,
   here, 
@@ -37,9 +19,12 @@ pacman::p_load(
   gtsummary,
   Hmisc,
   anthroplus,
-  rspiro
+  rspiro,
+  childsds,
+  pedbp
 )
 
+# Scripts
 source(here::here("scripts", "PAQ-C_item_9.R"))
 ```
 
@@ -47,31 +32,23 @@ source(here::here("scripts", "PAQ-C_item_9.R"))
 
 ```{r}
 #| include: false
-proyecto_redcap <- redcap_data(
-  uri = "https://redcap.upch.edu.pe/redcap_v15.5.14/API/",
-  token = "B17D698CB06FFE752F053EF8CC5D45CD"
-)
+# Read REDCap data
+source(here::here("scripts", "credentials.R"))
 
-# 2. Aplicar la transformación (AQUÍ es donde se aplican las etiquetas)
-# Por defecto convierte códigos a etiquetas (factores) y limpia checkboxes
+# Transformation of raw data into factors (labels)
 proyecto_procesado <- rd_transform(proyecto_redcap)
 
-# 3. Extraer tu data frame final etiquetado
+# Extract the data frame
 data <- proyecto_procesado$data
 
-source(here::here("scripts", "test.R"))
+# Variable labels
+source(here::here("scripts", "labels.R"))
 
-# Verificar
-head(data)
+# Check
+head(data, 10)
 ```
 
 ## Process data
-
-```{r}
-#| include: false
-# source(here::here("scripts", "test.R"))
-data <- data[-c(2, 79, 80), ]
-```
 
 ```{r}
 #| include: false
@@ -158,8 +135,7 @@ data_clear <- data |>
         "063 - Enrique Cruz Luque",
         "064 - Santiago Espinoza Yucra",
         "065 - Jesús Tapullima Chonote",
-        "072 - Ameht Paulo Quispe",
-        "077-Snaider Guillermo Davila Roman (eliminar)?"
+        "072 - Ameht Paulo Quispe"
       ) ~ 1,
       TRUE ~ NA_real_), 
     sexo_factor = fct_recode(as.character(sexo), "Masculino" = "1", "Femenino" = "2") |>
@@ -170,15 +146,15 @@ data_clear <- data |>
     edad_meses = edad_anios * 12,
     
     # Peso
-    peso_promedio = rowMeans(across(c(
+    peso_kg = rowMeans(across(c(
       peso_1, peso_2, peso_3
     )), na.rm = TRUE),
     
     # Talla
-    talla_promedio = rowMeans(across(c(
+    talla_cm = rowMeans(across(c(
       talla_1, talla_2, talla_3
     )), na.rm = TRUE),
-    talla_m = talla_promedio / 100,
+    talla_m = talla_cm / 100,
     
     # Pliegues
     pliegue_bicipital = rowMeans(across(
@@ -205,7 +181,7 @@ data_clear <- data |>
       )
     ), na.rm = TRUE), 
     
-    # Perimetros
+    # Perimeters/circumferences
     perimetro_cuello = rowMeans(across(
       c(
         perimetro_cuello_1, 
@@ -231,13 +207,33 @@ data_clear <- data |>
     ), na.rm = TRUE), 
     
     # Indices
-    imc = peso_promedio / (talla_m^2),
-    indice_ponderal = peso_promedio / (talla_m^3),
-    indice_cintura_talla = perimetro_cintura / talla_promedio,
+    glucosa_mmol = glucosa / 18.01,
+    trigliceridos_mmol  = trigliceridos / 88.57,
+    hdl_mmol = hdl_colesterol / 38.67,
+    imc = peso_kg / (talla_m^2),
+    indice_ponderal = peso_kg / (talla_m^3),
+    indice_cintura_talla = perimetro_cintura / talla_cm,
     indice_cintura_cadera = perimetro_cintura / perimetro_cadera,
+    TyG = log((trigliceridos * glucosa) / 2), 
+    VAI = case_when(
+      sexo == "Masculino" ~ (perimetro_cintura / (39.68 + (1.88 * imc))) * 
+        (trigliceridos_mmol / 1.03) * (1.31 / hdl_colesterol),
+      sexo == "Femenino"  ~ (perimetro_cintura / (36.58 + (1.89 * imc))) * 
+        (trigliceridos_mmol / 0.81) * (1.52 / hdl_colesterol),
+      TRUE ~ NA_real_
+    ),
+    TyG_WC = TyG * perimetro_cintura,
+    TyG_BMI = TyG * imc,
+    TyG_WHtR = TyG * indice_cintura_talla,
+    TG_HDL = trigliceridos / hdl_colesterol,
+    
+    TyG_WC_q4 = ntile(TyG_WC, 4),
+    TyG_BMI_q4 = ntile(TyG_BMI, 4),
+    TyG_WHtR_q4 = ntile(TyG_WHtR, 4),
+    TG_HDL_q4 = ntile(TG_HDL, 4),
     
     # Sumatoria de pliegues (TR + SE)
-    suma_pliegues = pliegue_tricipital + pliegue_subescapular,
+    suma_pliegues = (pliegue_tricipital + pliegue_subescapular) / 2,
     
     # Estimación del % de Grasa Corporal (%GC) - Ecuación de Boileau et al. (1985)
     grasa_boileau = case_when(
@@ -246,8 +242,8 @@ data_clear <- data |>
       TRUE ~ NA_real_
     ),
     
-    # Masa Grasa en Kilogramos
-    masa_grasa_kg_boileau = (grasa_boileau / 100) * peso_promedio,
+    # Masa Grasa en Kg
+    masa_grasa_kg_boileau = (grasa_boileau / 100) * peso_kg,
     
     # Estimación del %GC - Ecuación de Slaughetr et al. (1988)
     grasa_slaughet = case_when(
@@ -256,8 +252,8 @@ data_clear <- data |>
       TRUE ~ NA_real_
     ),
     
-    # Masa Grasa en Kilogramos
-    masa_grasa_kg_slaughet = (grasa_slaughet / 100) * peso_promedio,
+    # Masa Grasa en Kg
+    masa_grasa_kg_slaughet = (grasa_slaughet / 100) * peso_kg,
     
     # Variable de sexo codificada para Deurenberg (Hombres=1, Mujeres=0)
     sexo_deurenberg = case_when(
@@ -269,8 +265,8 @@ data_clear <- data |>
     # Estimación del %GC - Ecuación de Deuremberg et al.(1991)
     grasa_deurenberg = (1.51 * imc) - (0.70 * edad_anios) - (3.6 * sexo_deurenberg) + 1.4,
     
-    # Masa Grasa en Kilogramos
-    masa_grasa_kg_deurenberg = (grasa_deurenberg / 100) * peso_promedio,
+    # Masa Grasa en Kg
+    masa_grasa_kg_deurenberg = (grasa_deurenberg / 100) * peso_kg,
     
     # Estimación del %GC - Ecuación 1 de Urra et al. (2021)
     grasa_ict = case_when(
@@ -281,8 +277,8 @@ data_clear <- data |>
       TRUE ~ NA_real_
     ), 
     
-    # Masa Grasa en Kilogramos
-    masa_grasa_kg_ict = (grasa_ict / 100) * peso_promedio,
+    # Masa Grasa en Kg
+    masa_grasa_kg_ict = (grasa_ict / 100) * peso_kg,
     
     # Estimación del %GC - Ecuación 2 de Urra et al. (2021)
     grasa_ip = case_when(
@@ -293,15 +289,29 @@ data_clear <- data |>
       TRUE ~ NA_real_
     ),
     
-    # Masa Grasa en Kilogramos
-    masa_grasa_kg_ip = (grasa_ip / 100) * peso_promedio,
+    # Masa Grasa en Kg
+    masa_grasa_kg_ip = (grasa_ip / 100) * peso_kg,
+    
+    # WC ≥ 95th percentile for age and sex
+    sexo_rec = if_else(sexo == 1, "male", "female"),
+    
+    wc_percentile = sds(
+      perimetro_cintura,
+      age = edad_anios,
+      sex = sexo_rec, male = "male", female = "female",
+      item = "wc_sharma",
+      ref = us.ref,
+      type = "perc"
+    ), 
+    
+    p95_cintura = if_else(wc_percentile >= 0.95, 1, 0),
     
     # Z-Scores
     z_scores = anthroplus_zscores(
       sex = sexo,
       age_in_months = edad_meses,
-      weight_in_kg = peso_promedio,
-      height_in_cm = talla_promedio
+      weight_in_kg = peso_kg,
+      height_in_cm = talla_cm
     )
   ) |> 
   tidyr::unpack(z_scores) |>
@@ -348,6 +358,36 @@ data_clear <- data |>
         pulso_3
       )
     ), na.rm = TRUE),
+
+    sex_pedbp = if_else(sexo == 1, 1, 0))
+
+# Pediatric Blood Pressure Distribution
+bp_results <- p_bp(
+  q_sbp = data_clear$PAS,
+  q_dbp = data_clear$PAD,
+  age   = data_clear$edad_meses,
+  male  = data_clear$sex_pedbp,
+  height = data_clear$talla_cm
+)
+
+data_clear <- data_clear |>
+  mutate(
+    
+    # SBP and/or DBP ≥ 90th percentile for age, sex and height
+    sbp_p = bp_results$sbp_p * 100,
+    dbp_p = bp_results$dbp_p * 100,
+    
+    p90_bp = if_else(sbp_p >= 90 | dbp_p >= 90, 1, 0),
+    crit_tg   = if_else(trigliceridos_mmol >= 1.24, 1, 0),
+    crit_hdl  = if_else(hdl_mmol <= 1.03, 1, 0),
+    crit_glucosa  = if_else(glucosa_mmol >= 5.6, 1, 0),
+    
+    # Sumamos los criterios presentes
+    n_metabolic_abnormalities = rowSums(across(c(
+      p95_cintura, crit_tg, crit_hdl, p90_bp, crit_glucosa)), na.rm = TRUE), 
+    
+    # Definimos salud metabólica
+    metabolic_health = if_else(n_metabolic_abnormalities >= 2, "Metabólicamente no saludable", "Metabólicamente saludable"),
     
     # Depression
     across(
@@ -533,6 +573,59 @@ data_clear <- data_clear |>
       fev1_fvc_ratio >= 80 ~ "Normal",
       TRUE ~ NA_character_
     ),
+
+    # Ajustamos el sexo para rspiro (1=M, 2=F)
+    sex_rspiro = if_else(sexo == 1, 1, 2), 
+    
+    z_fev1 = zscore_GLI(
+      age = edad_anios,
+      height = talla_m,
+      gender = sex_rspiro,
+      ethnicity = 5,
+      FEV1 = fev1_maximo
+    ), 
+    
+    z_fvc  = zscore_GLI(
+      age = edad_anios,
+      height = talla_m,
+      gender = sex_rspiro,
+      ethnicity = 5,
+      FVC = fvc_maximo
+    ), 
+    
+    z_fev1_fvc  = zscore_GLI(
+      age = edad_anios,
+      height = talla_m,
+      gender = sex_rspiro,
+      ethnicity = 5,
+      FEV1FVC = fev1_fvc_ratio
+    ), 
+
+    # Conversión de Z-score a Percentil (0-100)
+    fev1_p = pnorm(z_fev1) * 100,
+    fvc_p  = pnorm(z_fvc) * 100,
+    fev1_fvc_p  = pnorm(z_fev1_fvc) * 100,
+
+    # Cálculo del % del Predicho (Opcional, muy usado en clínica)
+    # La función pctgli da el valor: (Medido / Predicho) * 100
+    fev1_pct_pred = pctpred_GLI(
+      age = edad_anios,
+      height = talla_m,
+      gender = sex_rspiro,
+      ethnicity = 5,
+      FEV1 = fev1_maximo
+    ), 
+    
+    # Criterio: ¿Está por debajo del percentil 5? (Límite Inferior de Normalidad)
+    crit_lung_fev1_p = if_else(fev1_p <= 5, 1, 0),
+    crit_lung_fvc_p = if_else(fvc_p <= 5, 1, 0),
+    crit_lung_fev1_fvc_p = if_else(fev1_fvc_p <= 5, 1, 0),
+    
+    clasificacion_espiro = case_when(
+      fev1_fvc_p <= 5 ~ "Sugerente de Obstrucción",
+      fvc_p <= 5 ~ "Sugerente de Restricción",
+      TRUE ~ NA
+    ), 
     
     # Cluster de PM2.5
     cluster = case_match(
@@ -542,6 +635,18 @@ data_clear <- data_clear |>
       "Colegio 0028 Jesus y María - La Molina" ~ "Cluster 2")
   )
 ```
+
+```{r}
+tbl_1 <- data_clear |>
+  dplyr::select(22:41)
+
+edad_pariente
+
+table(tbl_1$pariente_del_infante)
+
+lapply(tbl_1, function(x) table(x))
+```
+
 
 ## Tabla 1. Biomarcadores
 
@@ -565,7 +670,7 @@ tbl_1 <- data_clear |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
-  bold_p(t = 0.05) |>
+  bold_p(t = 0.05) |> 
   modify_header(
     label = "**Caraterísticas**",
     stat_0 = "**Total** (n = {n})",
@@ -581,7 +686,7 @@ tbl_1
 ```{r}
 tbl_2 <- data_clear |>
   dplyr::select(
-    sexo_factor, edad_anios, peso_promedio, talla_m, peso_promedio, imc, 
+    sexo_factor, edad_anios, peso_kg, talla_m, peso_kg, imc, 
     pliegue_bicipital, pliegue_tricipital, pliegue_subescapular, perimetro_cuello,
     cluster) |>
   tbl_summary(
@@ -591,7 +696,7 @@ tbl_2 <- data_clear |>
     label = list(
       sexo_factor	~ "Sexo",
       edad_anios ~ "Edad (años)",
-      peso_promedio ~ "Peso (Kg)",
+      peso_kg ~ "Peso (Kg)",
       talla_m	~ "Talla (metros)",
       imc ~ "IMC",
       pliegue_bicipital	~ "Pliegue bicipital (mm)",
@@ -621,7 +726,7 @@ tbl_3 <- data_clear |>
   dplyr::select(
     perimetro_cintura, perimetro_cadera, indice_cintura_cadera, grasa_boileau, 
     grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, zbfa_dx, zhfa_dx, 
-    dinamometria, cluster) |>
+    dinamometria, cluster, imc) |>
   tbl_summary(
     by = cluster,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
@@ -661,27 +766,23 @@ tbl_4 <- data_clear |>
   dplyr::select(
     estado_civil_pariente, estad_civil_pariente, nivel_educativo_pariente,
     situacion_laboral_pariente, laboral_pariente_1, sit_economica_1, sit_economica_2,
-    sit_economica_3, seguro_de_salud_adolescente, lactancia_materna, 
-    
-    
-    cluster) |>
+    sit_economica_3, seguro_de_salud_adolescente, lactancia_materna, cluster) |>
   tbl_summary(
     by = cluster,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
     statistic = list(all_categorical() ~"{n} ({p}%)"),
-    label = list(
-      perimetro_cintura	~ "Perímetro de cintura (cm)",
-      perimetro_cadera	~ "Perímetro de cadera (cm)",
-      indice_cintura_cadera	~ "ICC",
-      grasa_boileau ~ "%GC Boileau et al. (1985)",
-      grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
-      grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
-      grasa_ict ~ "%GC índice cintura talla",
-      grasa_ip ~ "%GC índice ponderal",
-      zbfa_dx ~ "IMC para la edad",
-      zhfa_dx ~ "Talla para la edad",
-      dinamometria ~ "Dinamometría"
-      ),
+    # label = list(
+    #   perimetro_cintura	~ "Perímetro de cintura (cm)",
+    #   perimetro_cadera	~ "Perímetro de cadera (cm)",
+    #   indice_cintura_cadera	~ "ICC",
+    #   grasa_boileau ~ "%GC Boileau et al. (1985)",
+    #   grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
+    #   grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
+    #   grasa_ict ~ "%GC índice cintura talla",
+    #   grasa_ip ~ "%GC índice ponderal",
+    #   zbfa_dx ~ "IMC para la edad",
+    #   zhfa_dx ~ "Talla para la edad",
+    #   dinamometria ~ "Dinamometría"),
     missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
@@ -696,3 +797,53 @@ tbl_4 <- data_clear |>
 
 tbl_4
 ```
+
+```{r}
+tbl_1_data <- data_clear |>
+  dplyr::select(alergia_pteronyssinus:severidad_rinitis, feno, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2)),
+    missing = "always") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05)
+
+tbl_1_data
+```
+
+```{r}
+tbl_1_data <- data_clear |>
+  dplyr::select(sintomas_respiratorios_acaros_del_polvo_polvo_casero:feno, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2)),
+    missing = "always") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05)
+
+tbl_1_data
+```
+
+```{r}
+tbl_1_data <- data_clear |>
+  dplyr::select(PHQ_9:paqc_dx, 
+                cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2)),
+    missing = "always") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05)
+
+tbl_1_data
+
+# Limpiar tablas
+# Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
+```
+
