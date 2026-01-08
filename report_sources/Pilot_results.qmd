@@ -1,6 +1,6 @@
 ---
 title: "Pilot_results"
-format: pptx
+format: docx
 editor: source
 ---
 
@@ -21,7 +21,9 @@ pacman::p_load(
   anthroplus,
   rspiro,
   childsds,
-  pedbp
+  pedbp,
+  finalfit,
+  pwr
 )
 
 # Scripts
@@ -216,12 +218,12 @@ data_clear <- data |>
     indice_cintura_cadera = perimetro_cintura / perimetro_cadera,
     TyG = log((trigliceridos * glucosa) / 2), 
     VAI = case_when(
-      sexo == "Masculino" ~ (perimetro_cintura / (39.68 + (1.88 * imc))) * 
-        (trigliceridos_mmol / 1.03) * (1.31 / hdl_colesterol),
-      sexo == "Femenino"  ~ (perimetro_cintura / (36.58 + (1.89 * imc))) * 
-        (trigliceridos_mmol / 0.81) * (1.52 / hdl_colesterol),
+      sexo_factor == "Masculino" ~ (perimetro_cintura / (39.68 + (1.88 * imc))) * 
+        (trigliceridos_mmol / 1.03) * (1.31 / hdl_mmol),
+      sexo_factor == "Femenino"  ~ (perimetro_cintura / (36.58 + (1.89 * imc))) * 
+        (trigliceridos_mmol / 0.81) * (1.52 / hdl_mmol),
       TRUE ~ NA_real_
-    ),
+    ), 
     TyG_WC = TyG * perimetro_cintura,
     TyG_BMI = TyG * imc,
     TyG_WHtR = TyG * indice_cintura_talla,
@@ -322,14 +324,16 @@ data_clear <- data |>
       zbfa < -2 ~ "Delgadez",
       zbfa < -3 ~ "Delgadez Severa",
       TRUE      ~ "Normal"
-    ),
+    ) |>
+      ff_label("Altura para la edad (z-score)"),
     zhfa_dx = case_when(
       zhfa < -3 ~ "Talla baja severa",
       zhfa < -2 ~ "Talla baja (Stunting)",
       zhfa > 3  ~ "Talla muy alta (revisar)", 
       is.na(zhfa) ~ "Dato faltante",
       TRUE      ~ "Talla Normal"
-    ),
+    ) |>
+      ff_label("IMC para la edad (z-score)"),
     
     # Dinamometria
     dinamometria = pmax(dinamo_1, dinamo_2, dinamo_3, dinamo_max, na.rm = TRUE),
@@ -544,29 +548,37 @@ data_clear <- data_clear |>
       paqc_final_score >= 2 & paqc_final_score <= 3 ~ "Moderadamente activo",
       paqc_final_score >= 4 & paqc_final_score <= 5 ~ "Muy activo"),
     
+    across(
+      c(fvc, fvc_2, fvc_3, fvc_4, fvc_5, fvc_6, fvc_7, fvc_8,
+        fev1, fev1_2, fev1_3, fev1_4, fev1_5, fev1_6, fev1_7, fev1_8,
+        pef, pef_2, pef_3, pef_4, pef_5, pef_6, pef_7, pef_8,
+        fev3, fev3_2, fev3_3, fev3_4, fev3_5, fev3_6, fev3_7, fev3_8,
+        fev6, fev6_2, fev6_3, fev6_4, fev6_5, fev6_6, fev6_7, fev6_8),
+      ~ as.numeric(ifelse(.x == "NI" | .x == "999", NA, .x))
+    ),
     # FVC
     fvc_maximo = pmax(
       fvc, fvc_2, fvc_3, fvc_4, fvc_5, fvc_6, fvc_7, fvc_8, na.rm = TRUE),
-    
+
     # FEV1
     fev1_maximo = pmax(
       fev1, fev1_2, fev1_3, fev1_4, fev1_5, fev1_6, fev1_7, fev1_8, na.rm = TRUE),
-    
+
     # PEF
     pef_maximo = pmax(
       pef, pef_2, pef_3, pef_4, pef_5, pef_6, pef_7, pef_8, na.rm = TRUE),
-    
+
     # FEV3
     fev3_maximo = pmax(
       fev3, fev3_2, fev3_3, fev3_4, fev3_5, fev3_6, fev3_7, fev3_8, na.rm = TRUE),
-    
+
     # FEV6
     fev6_maximo = pmax(
       fev6, fev6_2, fev6_3, fev6_4, fev6_5, fev6_6, fev6_7, fev6_8, na.rm = TRUE),
-    
+
     # Calcular el índice FEV1/FVC
     fev1_fvc_ratio = (fev1_maximo / fvc_maximo) * 100,
-    
+
     interpretacion_espiro = case_when(
       fev1_fvc_ratio < 80 ~ "Posible Obstrucción",
       fev1_fvc_ratio >= 80 & fvc_maximo < 80 ~ "Posible Restricción",
@@ -575,31 +587,31 @@ data_clear <- data_clear |>
     ),
 
     # Ajustamos el sexo para rspiro (1=M, 2=F)
-    sex_rspiro = if_else(sexo == 1, 1, 2), 
-    
+    sex_rspiro = if_else(sexo == 1, 1, 2),
+
     z_fev1 = zscore_GLI(
       age = edad_anios,
       height = talla_m,
       gender = sex_rspiro,
       ethnicity = 5,
       FEV1 = fev1_maximo
-    ), 
-    
+    ),
+
     z_fvc  = zscore_GLI(
       age = edad_anios,
       height = talla_m,
       gender = sex_rspiro,
       ethnicity = 5,
       FVC = fvc_maximo
-    ), 
-    
+    ),
+
     z_fev1_fvc  = zscore_GLI(
       age = edad_anios,
       height = talla_m,
       gender = sex_rspiro,
       ethnicity = 5,
       FEV1FVC = fev1_fvc_ratio
-    ), 
+    ),
 
     # Conversión de Z-score a Percentil (0-100)
     fev1_p = pnorm(z_fev1) * 100,
@@ -614,46 +626,372 @@ data_clear <- data_clear |>
       gender = sex_rspiro,
       ethnicity = 5,
       FEV1 = fev1_maximo
-    ), 
-    
+    ),
+
     # Criterio: ¿Está por debajo del percentil 5? (Límite Inferior de Normalidad)
     crit_lung_fev1_p = if_else(fev1_p <= 5, 1, 0),
     crit_lung_fvc_p = if_else(fvc_p <= 5, 1, 0),
     crit_lung_fev1_fvc_p = if_else(fev1_fvc_p <= 5, 1, 0),
-    
+
     clasificacion_espiro = case_when(
       fev1_fvc_p <= 5 ~ "Sugerente de Obstrucción",
       fvc_p <= 5 ~ "Sugerente de Restricción",
       TRUE ~ NA
-    ), 
+    ),
     
     # Cluster de PM2.5
     cluster = case_match(
       colegio_id, 
       c("Colegio Jorge Basadre - VMT", "Colegio Santísima Virgen de Chapi - Pachacamac") ~
-        "Cluster 1",
-      "Colegio 0028 Jesus y María - La Molina" ~ "Cluster 2")
+        "VMT y Pachacamac",
+      "Colegio 0028 Jesus y María - La Molina" ~ "La Molina"),
+    
+    pariente_del_infante = factor(pariente_del_infante) |>
+      fct_recode(
+        "Otro" = "Otro pariente (especifique): {pariente_del_infante_2}") |>
+      fct_relevel("Madre", "Padre", "Otro") |>
+      ff_label("Pariente"),
+    
+    edad_pariente = ff_label(edad_pariente, "Edad del Pariente"),
+    
+    estado_civil_pariente = case_match(
+      estado_civil_pariente, 
+      c("Soltero(a)", "Casado(a)") ~ "Soltero(a) o casado(a)",
+      c("Separado(a)", "Divorciado(a)", "Viudo(a)", "Prefiero no responder") ~ "Otro",
+      .default = estado_civil_pariente) |>
+      fct_relevel("Conviviente", "Soltero(a) o casado(a)", "Otro") |>
+      ff_label("Estado civil"),
+    
+    nivel_educativo_pariente = case_match(
+      nivel_educativo_pariente, 
+      c("Inicial", "Primaria") ~ "Primaria",
+      c("Técnica", "Universitaria") ~ "Superior",
+      .default = nivel_educativo_pariente) |>
+      fct_relevel("Primaria", "Secundaria", "Superior") |>
+      ff_label("Nivel educativo del pariente"),
+    
+    across(starts_with("sit_economica"), ~na_if(., "Prefiere no responder")),
+    
+    nivel_economico = case_when(
+      # NIVEL ALTO: Viven con comodidad o ganan más de S/. 3390
+      sit_economica_1 %in% c("Viven con comodidad", "Les alcanza bien") | 
+      sit_economica_3 %in% c("Entre S/. 3391 y S/. 4520", "Más de 4521") ~ "Alto/Suficiente",
+
+      # NIVEL BAJO: Dificultad para cubrir gastos o ganan menos del mínimo (S/. 1130)
+      sit_economica_1 %in% c("Les resulta algo difícil cubrir los gastos", 
+                             "Les resulta muy difícil cubrir los gastos") | 
+      sit_economica_3 == "Menos de S/. 1130" ~ "Bajo/Vulnerable",
+
+      # NIVEL MEDIO: Se las arreglan o ingresos intermedios
+      sit_economica_1 == "Se las arreglan con lo que tienen" | 
+      sit_economica_3 %in% c("Entre S/.1131 y S/.2260", "Entre S/. 2261 y S/. 3390") ~ "Medio",
+
+      # Mantener los NAs
+      TRUE ~ NA_character_
+    ) |>
+      fct_relevel("Alto/Suficiente", "Medio", "Bajo/Vulnerable") |>
+      ff_label("Situación económica"),
+    
+    ano_residencia = ntile(ano_residencia, 4),
+    ano_residencia = factor(ano_residencia) |>
+      fct_recode(
+        "0-5 años" = "1", 
+        "6-10 años" = "2", 
+        "11-18.5 años" = "3", 
+        "Más de 18.5 años" = "4") |>
+      fct_relevel("0-5 años", "6-10 años", "11-18.5 años", "Más de 18.5 años") |>
+      ff_label("Años de residencia"),
+    
+    orden_del_hijo = case_match(
+      orden_del_hijo, 
+      "Primer hijo(a)" ~ "Primero",
+      "Segundo hijo(a)" ~ "Segundo",
+      c("Tercer hijo(a)", "Cuarto hijo(a)", "Quinto hijo(a)", "Sexto hijo(a)", 
+        "Más de seis hijos(as)") ~ "Tercero en adelante",
+      .default = orden_del_hijo) |>
+      fct_relevel("Primero", "Segundo", "Tercero en adelante") |>
+      ff_label("Orden del hijo"),
+    
+    # Duración total de la lactancia
+    lm_duracion_total = case_when(
+      lactancia_materna == "No" ~ 0,
+      !is.na(as.numeric(lactancia_materna_2_meses)) ~ as.numeric(lactancia_materna_2_meses),
+      TRUE ~ NA_real_) |>
+      ff_label("Duración total de la lactancia (meses)"), 
+    
+    # Lactancia materna exclusiva (LME) según OMS: Sin fórmula ni sólidos antes de los 6 meses
+    lme_6meses = case_when(
+      # Si nunca tomó fórmula o empezó fórmula a los 6 meses o más
+      (
+        lactancia_materna_3 == "Nunca tomó fórmula" |
+          as.numeric(lactancia_materna_3_meses) >= 6
+      ) &
+        (as.numeric(lactancia_materna_4_meses) >= 6) ~ "Sí",
+      
+      # Si tomó fórmula antes de los 6 meses o sólidos antes de los 6 meses
+      as.numeric(lactancia_materna_3_meses) < 6 |
+        as.numeric(lactancia_materna_4_meses) < 6 ~ "No",
+      
+      TRUE ~ NA_character_
+    ) |>
+      fct_relevel("Sí", "No") |>
+      ff_label("Lactancia materna exclusiva"), 
+    
+    # Inicio de la alimentación complementaria
+    edad_solidos = case_match(
+      lactancia_materna_4_meses, 4 ~ "Antes de 6 meses",
+      6 ~ "A los 6 meses", c(7, 8, 12) ~ "Después de 6 meses") |>
+      fct_relevel("Antes de 6 meses", "A los 6 meses", "Después de 6 meses") |>
+      ff_label("Inicio de alimentación complementaria"),
+    
+    enfermedad_pulmonar = case_when(
+      enf_pulmonares_rinitis_alergica == "Yes" ~ "Rinitis alérgica",
+      enf_pulmonares_asma == "Yes" ~ "Asma",
+      enf_pulmonares_bronquitis_cronica == "Yes" ~ "Bronquitis crónica",
+      enf_pulmonares_ninguna == "Yes" ~ "Ninguna",
+      TRUE ~ NA_character_) |>
+      fct_relevel(
+        "Rinitis alérgica", "Asma", "Bronquitis crónica", "Ninguna") |>
+      ff_label("Enfermedades pulmonares"),
+    
+    across(c(exposoma_1_5b, exposoma_2_5b), ~ as.numeric(replace(.x, .x == "04", 4))),
+    
+    across(
+      alergia_pteronyssinus:alergia_olivo,
+      ~ case_match(.x, "Negativo" ~ "No", "Positivo" ~ "Yes")
+    ),
+    
+    across(c(asma, rinitis_alergica), ~ fct_recode(.x, "Yes" = "Sí")),
+    
+    # --- MÓDULO ASMA ---
+    # Prevalencia de vida: ¿Alguna vez pitos?
+    asma_vida = ifelse(isaac_asma_21 == "Sí", 1, 0),
+    
+    # Prevalencia actual: Pitos en los últimos 12 meses (Indicador clave)
+    asma_actual = ifelse(isaac_asma_22 == "Sí", 1, 0),
+    
+    # Asma Severa (Definición ISAAC): 
+    # Tener asma actual Y (>=4 ataques O despertarse >=1 noche/semana O habla limitada)
+    asma_severa = case_when(
+      asma_actual == 0 ~ 0,
+      asma_actual == 1 & (isaac_asma_23 %in% c("4 a 12", "Más de 12") | 
+                          isaac_asma_24 == "Una o más noches por semana" | 
+                          isaac_asma_25 == "Sí") ~ 1,
+      TRUE ~ 0
+    ),
+    
+    # --- MÓDULO RINITIS ---
+    rinitis_vida = ifelse(isaac_rinitis_29 == "Sí", 1, 0),
+    rinitis_actual = ifelse(isaac_rinitis_30 == "Sí", 1, 0),
+    
+    # Rinoconjuntivitis (Síntomas nasales + ojos llorosos/picor)
+    rinoconjuntivitis = ifelse(rinitis_actual == 1 & isaac_rinitis_33 == "Sí", 1, 0),
+
+    # --- MÓDULO DERMATITIS ---
+    eczema_vida = ifelse(isaac_dermatitis_35 == "Sí", 1, 0),
+    eczema_actual = ifelse(isaac_dermatitis_36 == "Sí", 1, 0)
   )
 ```
 
-```{r}
-tbl_1 <- data_clear |>
-  dplyr::select(22:41)
-
-edad_pariente
-
-table(tbl_1$pariente_del_infante)
-
-lapply(tbl_1, function(x) table(x))
-```
-
-
-## Tabla 1. Biomarcadores
+## Tabla 1. Características socioeconómicas del pariente
 
 ```{r}
 tbl_1 <- data_clear |>
   dplyr::select(
-    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso, cluster) |>
+    pariente_del_infante, edad_pariente, estado_civil_pariente,
+    nivel_educativo_pariente, nivel_economico, seguro_de_salud_adolescente, 
+    ano_residencia, orden_del_hijo, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical()~ c(1, 1)),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05) |>
+  modify_header(
+    all_stat_cols() ~ "**{level}** (n = {n})",
+    label = "**Caraterísticas**",
+    stat_0 = "**Total** (n = {n})") |>
+  modify_spanning_header(all_stat_cols(stat_0 = FALSE) ~ "**Colegio**")
+```
+
+## Tabla 2. Antecedentes de la primera infancia y actuales
+
+```{r}
+tbl_2 <- data_clear |>
+  dplyr::select(
+    lm_duracion_total, lme_6meses, edad_solidos,
+    hospitalizado_nino_nacer, enf_bajopeso_prematuro, enf_macrosomia, 
+    enfermedad_pulmonar, enf_dm1, enf_resit_insulina, enf_dislipidemias, 
+    inf_respirat_recurrentes, hospita_previas, vacunas, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical()~ c(1, 1)),
+    label = list(
+      hospitalizado_nino_nacer ~ "Hospitalización al nacer",
+      enf_bajopeso_prematuro ~ "Bajo peso al nacer o prematuridad (37 semanas)",
+      enf_macrosomia ~ "Macrosomía (peso mayor de 4 Kg al nacer)",
+      enf_dm1 ~ "Diabetes Mellitus tipo 1",
+      enf_resit_insulina ~ "Resistencia a la insulina",
+      enf_dislipidemias ~ "Dislipidemia",
+      inf_respirat_recurrentes  ~ "Infecciones respiratorias recurrentes",
+      hospita_previas ~ "Hospitalizaciones previas este año",
+      vacunas ~ "Vacunas al día este año"
+    ),
+    missing = "ifany"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05) 
+```
+
+## Tabla 3. Antecedentes familiares
+
+```{r}
+tbl_3 <- data_clear |>
+  dplyr::select(
+    ant_familiar_pulmon, ant_diabetes2, ant_hta, ant_fenf_cardiov, ant_dislipidemias,
+    ant_cancer, ant_obesidad, ant_familiar_otros, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical()~ c(1, 1)),
+    label = list(
+      ant_familiar_pulmon ~ "Antecedente familiar de enfermedad pulmonar",
+      ant_diabetes2 ~ "Antecedente familiar de Diabetes Mellitus 2",
+      ant_hta ~ "Antecedente familiar de HTA",
+      ant_fenf_cardiov ~ "Antecedente familiar de CVD",
+      ant_dislipidemias ~ "Antecedente familiar de dislipidemias",
+      ant_cancer ~ "Antecedente familiar de cáncer",
+      ant_obesidad ~ "Antecedente familiar de obesidad",
+      ant_familiar_otros ~ "Otro antecedentes familiar"
+    ),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05) 
+```
+
+## Tabla 4. Salud mental, nutrición y actividad física
+
+```{r}
+tbl_4 <- data_clear |>
+  dplyr::select(ansiedad_1, ansiedad_2, depresion_1, depresion_2, PHQ_9,
+    depresion, PHQ_9, depresion, GAD_7, ansiedad, afhc_score, dinamometria,
+    categoria_afhc, paqc_final_score, paqc_dx, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical()~ c(1, 1)),
+    label = list(
+      ansiedad_1 ~ "Nerviosismo del pariente",
+      ansiedad_2 ~ "Preocupación del pariente",
+      depresion_1 ~ "Apatía o anhedonia del pariente",
+      depresion_2 ~ "Depresión del pariente",
+      PHQ_9 ~ "Puntaje del PHQ-9",
+      depresion ~ "Gravedad de la depresión",
+      GAD_7 ~ "Puntaje del GAD-7",
+      ansiedad ~ "Trastorno de Ansiedad Generalizada",
+      afhc_score ~ "Puntaje del AFHS",
+      categoria_afhc ~ "Hábitos alimentarios para adolescentes",
+      paqc_final_score ~ "Puntaje del PAQ-A",
+      paqc_dx ~ "Actividad física para adolescentes",
+      dinamometria ~ "Dinapenia"
+    ),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05)
+```
+
+## Tabla 5. Exposoma
+
+```{r}
+# tbl_5 <- data_clear |>
+#   dplyr::select(exposoma_1_1a:exposoma_2_6b, cluster) |>
+#   tbl_summary(
+#     by = cluster,
+#     type = list(everything() ~ "continuous"),
+#     digits = list(all_continuous() ~ 1), 
+#     statistic = list(everything() ~ "{median} ({p25}, {p75})"),
+#     missing = "ifany"
+#   ) |>
+#   add_overall() |>
+#   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+#   bold_p(t = 0.05)
+```
+
+## Tabla 6. Alegias, asma y rinitis
+
+```{r}
+tbl_6 <- data_clear |>
+  dplyr::select(
+    alergia_pteronyssinus, alergia_farinae, alergia_destructor, 
+    alergia_tropicalis, alergia_perro, alergia_germanica, asma, rinitis_alergica,
+    feno, cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical() ~ c(1, 1)),
+    label = list(
+      alergia_pteronyssinus ~ "Dermatophagoides pteronyssinus (polvo)",
+      alergia_farinae ~ "Dermatophagoides farinae (polvo)",
+      alergia_destructor ~ "Alergia a Lepidoglyphus destructor (ácaro)",
+      alergia_tropicalis ~ "Alergia a Blomia tropicalis (ácaro)",
+      alergia_perro ~ "Alergia al perro",
+      alergia_germanica ~ "Alergia a cucaracha chiquita",
+      asma ~ "Asma",
+      rinitis_alergica ~ "Rinitis alérgica",
+      feno ~ "Fracción Exhalada de Óxido Nítrico (FeNO)"
+    ),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05)
+```
+
+## Tabla 7. International Study of Asthma and Allergies in Childhood (ISAAC)
+
+```{r}
+tbl_7 <- data_clear |>
+  select(
+    asma_vida, asma_actual, asma_severa, rinitis_actual, rinoconjuntivitis, 
+    eczema_actual, cluster) |>
+  tbl_summary(
+    by = cluster, # Si quieres comparar por tus grupos de salud metabólica
+    label = list(
+      asma_vida ~ "Sibilancias alguna vez",
+      asma_actual ~ "Sibilancias últimos 12 meses",
+      asma_severa ~ "Asma con síntomas de severidad",
+      rinitis_actual ~ "Rinitis actual (12m)",
+      rinoconjuntivitis ~ "Rinoconjuntivitis alérgica",
+      eczema_actual ~ "Eczema/Dermatitis actual"
+    ),
+    missing = "no"
+  ) |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_p(t = 0.05)
+```
+
+## Tabla 8. Biomarcadores
+
+```{r}
+tbl_8 <- data_clear |>
+  dplyr::select(
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
+    TyG, VAI, metabolic_health, TyG, cluster) |>
   tbl_summary(
     by = cluster,
     digits = list(all_continuous() ~ c(2, 2)),
@@ -664,29 +1002,32 @@ tbl_1 <- data_clear |>
       colesterol_total ~ "Colesterol total (mg/dL)",
       PAS ~ "Presión arterial sistólica (mmHg)",
       PAD ~ "Presión arterial diastólica (mmHg)",
-      pulso ~ "Frecuencia cardíaca (latidos por minuto)"
+      pulso ~ "Frecuencia cardíaca (latidos por minuto)",
+      TyG ~ "Índice triglicéridos-glucosa (TyG)",
+      VAI ~ "Índice de adiposidad visceral (VAI)",
+      metabolic_health ~ "Fenotipo metabólico"
       ),
     missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
-  bold_p(t = 0.05) |> 
-  modify_header(
-    label = "**Caraterísticas**",
-    stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Cluster 1** (n = {n})",
-    stat_2 = "**Cluster 2** (n = {n})") |>
-  modify_caption(caption = "**Tabla 1. Biomarcadores** N = {N}")
-
-tbl_1
+  bold_p(t = 0.05)
 ```
 
-## Tabla 2. Antropometría
+```{r}
+#| eval: false
+tbl_1 <- data_clear |>
+  dplyr::select(ataque_corazon:estornudos)
+
+lapply(tbl_1 , function(x) addmargins(table(x, useNA = "ifany")))
+```
+
+## Tabla 9. Antropometría
 
 ```{r}
-tbl_2 <- data_clear |>
+tbl_9 <- data_clear |>
   dplyr::select(
-    sexo_factor, edad_anios, peso_kg, talla_m, peso_kg, imc, 
+    sexo_factor, edad_anios, peso_kg, talla_m, peso_kg, imc, zbfa_dx, zhfa_dx,
     pliegue_bicipital, pliegue_tricipital, pliegue_subescapular, perimetro_cuello,
     cluster) |>
   tbl_summary(
@@ -708,25 +1049,16 @@ tbl_2 <- data_clear |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
-  bold_p(t = 0.05) |>
-  modify_header(
-    label = "**Caraterísticas**",
-    stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Cluster 1** (n = {n})",
-    stat_2 = "**Cluster 2** (n = {n})") |>
-  modify_caption(caption = "**Tabla 2. Antropometría** N = {N}")
-
-tbl_2
+  bold_p(t = 0.05)
 ```
 
-## Tabla 3. Grasa corporal
+## Tabla 10. Índices
 
 ```{r}
-tbl_3 <- data_clear |>
+tbl_10 <- data_clear |>
   dplyr::select(
-    perimetro_cintura, perimetro_cadera, indice_cintura_cadera, grasa_boileau, 
-    grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, zbfa_dx, zhfa_dx, 
-    dinamometria, cluster, imc) |>
+    perimetro_cintura, perimetro_cadera, indice_cintura_cadera, indice_cintura_talla, 
+    TyG_WC, TyG_BMI, TyG_WHtR, TG_HDL, cluster) |>
   tbl_summary(
     by = cluster,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
@@ -734,116 +1066,193 @@ tbl_3 <- data_clear |>
     label = list(
       perimetro_cintura	~ "Perímetro de cintura (cm)",
       perimetro_cadera	~ "Perímetro de cadera (cm)",
-      indice_cintura_cadera	~ "ICC",
-      grasa_boileau ~ "%GC Boileau et al. (1985)",
-      grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
-      grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
-      grasa_ict ~ "%GC índice cintura talla",
-      grasa_ip ~ "%GC índice ponderal",
-      zbfa_dx ~ "IMC para la edad",
-      zhfa_dx ~ "Talla para la edad",
-      dinamometria ~ "Dinamometría"
+      indice_cintura_cadera	~ "Índice cintura-cadera",
+      indice_cintura_talla ~ "Índice cintura-altura (ICT)",
+      TyG_WC ~ "TyG-Circunferencia de la cintura",
+      TyG_BMI ~ "TyG-IMC",
+      TyG_WHtR ~ "TyG-ICT",
+      TG_HDL ~ "TyG-HDL"
       ),
     missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
-  bold_p(t = 0.05) |>
-  modify_header(
-    label = "**Caraterísticas**",
-    stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Cluster 1** (n = {n})",
-    stat_2 = "**Cluster 2** (n = {n})") |>
-  modify_caption(caption = "**Tabla 3. Grasa corporal** N = {N}")
-
-tbl_3
+  bold_p(t = 0.05)
 ```
 
-##
+## Tabla 11. Grasa corporal
 
 ```{r}
-tbl_4 <- data_clear |>
+tbl_11 <- data_clear |>
   dplyr::select(
-    estado_civil_pariente, estad_civil_pariente, nivel_educativo_pariente,
-    situacion_laboral_pariente, laboral_pariente_1, sit_economica_1, sit_economica_2,
-    sit_economica_3, seguro_de_salud_adolescente, lactancia_materna, cluster) |>
+    grasa_boileau, grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, cluster) |>
   tbl_summary(
     by = cluster,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
     statistic = list(all_categorical() ~"{n} ({p}%)"),
-    # label = list(
-    #   perimetro_cintura	~ "Perímetro de cintura (cm)",
-    #   perimetro_cadera	~ "Perímetro de cadera (cm)",
-    #   indice_cintura_cadera	~ "ICC",
-    #   grasa_boileau ~ "%GC Boileau et al. (1985)",
-    #   grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
-    #   grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
-    #   grasa_ict ~ "%GC índice cintura talla",
-    #   grasa_ip ~ "%GC índice ponderal",
-    #   zbfa_dx ~ "IMC para la edad",
-    #   zhfa_dx ~ "Talla para la edad",
-    #   dinamometria ~ "Dinamometría"),
+    label = list(
+      grasa_boileau ~ "%GC Boileau et al. (1985)",
+      grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
+      grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
+      grasa_ict ~ "%GC ICT",
+      grasa_ip ~ "%GC índice ponderal"
+      ),
     missing = "no") |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
   bold_labels() |>
-  bold_p(t = 0.05) |>
-  modify_header(
-    label = "**Caraterísticas**",
-    stat_0 = "**Total** (n = {n})",
-    stat_1 = "**Cluster 1** (n = {n})",
-    stat_2 = "**Cluster 2** (n = {n})") |>
-  modify_caption(caption = "**Tabla 3. Grasa corporal** N = {N}")
+  bold_p(t = 0.05)
+```
 
-tbl_4
+# Tablas unidas
+
+```{r}
+# Stack tables
+tables = tbl_stack(
+  list(tbl_1, tbl_2, tbl_3, tbl_4, tbl_6, tbl_7, tbl_8, tbl_9, tbl_10, tbl_11),
+  group_header = c(
+    "Características socioeconómicas del pariente",
+    "Antecedentes de la primera infancia y actuales",
+    "Antecedentes familiares",
+    "Salud mental, nutrición y actividad física",
+    "Alegias, asma y rinitis",
+    "ISAAC",
+    "Biomarcadores",
+    "Antropometría",
+    "Índices",
+    "Porcentaje de grasa corporal"),
+  quiet = TRUE
+  )
+
+# # Convert gtsummary object to a flextable object and format character columns
+# flex_tables <- tables |>
+#   gtsummary::as_flex_table() |>
+#   flextable::fontsize(part = "all", size = 10) |>
+#   ftExtra::colformat_md()
+# 
+# View (gtsummary object)
+tables
+```
+
+Limpiar tablas
+Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
+
+# Tamaño de muestra
+
+```{r}
+#| eval: false
+m <- 35           # Niños que tienes por colegio (limitado)
+efecto <- 0.33    # Efecto esperado del PM2.5 (pequeño)
+alfa <- 0.05      # Nivel de significancia [cite: 103]
+poder <- 0.80     # Poder deseado [cite: 103]
+icc <- 0.02       # Interdependencia estimada dentro del colegio [cite: 165]
+
+# 1. Calcular N individual (como si no hubiera colegios) [cite: 77, 81]
+calc_n <- pwr.t.test(d = efecto, sig.level = alfa, power = poder, type = "two.sample")
+n_indiv_total <- ceiling(calc_n$n * 2) # Total para ambos grupos (expuestos vs control)
+
+# 2. Calcular el Efecto de Diseño (DE) 
+de <- 1 + icc * (m - 1)
+
+# 3. Calcular el número total de niños necesarios ajustados [cite: 112]
+n_ajustado <- n_indiv_total * de
+
+# 4. Calcular el número de colegios (k) necesarios
+k_total <- ceiling(n_ajustado / m)
+
+# --- RESULTADOS ---
+cat("Niños necesarios si fueran independientes:", n_indiv_total, "\n")
+cat("Efecto de Diseño (DE):", de, "\n")
+cat("Número total de colegios (k) necesarios:", k_total, "\n")
+cat("Total de niños a reclutar:", k_total * m, "\n")
 ```
 
 ```{r}
-tbl_1_data <- data_clear |>
-  dplyr::select(alergia_pteronyssinus:severidad_rinitis, feno, cluster) |>
-  tbl_summary(
-    by = cluster,
-    digits = list(all_continuous() ~ c(2, 2)),
-    missing = "always") |>
-  add_overall() |>
-  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
-  bold_labels() |>
-  bold_p(t = 0.05)
+#| eval: false
+# Parámetros de la cohorte
+n_indiv <- 350       # Niños necesarios para detectar el efecto (Paso 1) [cite: 85]
+m <- 25              # Niños disponibles por colegio actualmente
+años_estudio <- 1    # Duración del seguimiento
+tasa_atricion <- 0.10 # 10% de pérdida anual esperada
+icc <- 0.02          # Correlación por colegio [cite: 103]
 
-tbl_1_data
+# 1. Ajuste por atrición (Paso adicional para cohorte)
+# Necesitas reclutar más niños hoy porque algunos se irán
+n_reclutar_indiv <- n_indiv / (1 - tasa_atricion)^años_estudio
+
+# 2. Cálculo del Efecto de Diseño (DE) de Sadler et al.
+de <- 1 + icc * (m - 1) # [cite: 150]
+
+# 3. Cálculo de colegios (k) necesarios
+k_necesarios <- (n_reclutar_indiv * de) / m
+
+# Resultados
+cat("Niños a reclutar inicialmente (ajustado por pérdida):", ceiling(n_reclutar_indiv), "\n")
+cat("Efecto de Diseño:", de, "\n")
+cat("Número de colegios necesarios (k):", ceiling(k_necesarios), "\n")
 ```
 
 ```{r}
-tbl_1_data <- data_clear |>
-  dplyr::select(sintomas_respiratorios_acaros_del_polvo_polvo_casero:feno, cluster) |>
-  tbl_summary(
-    by = cluster,
-    digits = list(all_continuous() ~ c(2, 2)),
-    missing = "always") |>
-  add_overall() |>
-  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
-  bold_labels() |>
-  bold_p(t = 0.05)
+#| eval: false
+# --- PARÁMETROS DE LA COHORTE ---
+p1 <- 0.32          # Incidencia en grupo control (10%)
+p2 <- 0.33          # Incidencia en grupo expuesto (18%)
+m <- 25             # Niños que puedes conseguir por colegio (limitado)
+icc <- 0.02         # Valor usado por Sadler et al. para cálculos de poder [cite: 147]
+atricion <- 0.10    # 15% de pérdida de seguimiento esperada
+alfa <- 0.05        # Significancia [cite: 85]
+poder <- 0.80       # Poder estadístico [cite: 85]
 
-tbl_1_data
+# 1. Tamaño de muestra individual (Efecto de Tamaño para Proporciones)
+# Calculamos la 'h' de Cohen para proporciones
+h_size <- pwr::ES.h(p1, p2) 
+n_srs <- pwr.2p.test(h = h_size, sig.level = alfa, power = poder)$n * 2
+
+# 2. Cálculo del Efecto de Diseño (DE) según Sadler et al.
+de <- 1 + icc * (m - 1)
+
+# 3. Tamaño de muestra total ajustado por clusters y atrición
+n_final <- (n_srs * de) / (1 - atricion)
+
+# 4. Número de colegios (k) necesarios
+k_total <- ceiling(n_final / m)
+
+# --- RESULTADOS ---
+cat("Niños necesarios (independientes):", ceiling(n_srs), "\n")
+cat("Efecto de Diseño (DE):", de, "\n")
+cat("Número total de colegios necesarios:", k_total, "\n")
+cat("Total de niños a reclutar:", k_total * m, "\n")
 ```
 
 ```{r}
-tbl_1_data <- data_clear |>
-  dplyr::select(PHQ_9:paqc_dx, 
-                cluster) |>
-  tbl_summary(
-    by = cluster,
-    digits = list(all_continuous() ~ c(2, 2)),
-    missing = "always") |>
-  add_overall() |>
-  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
-  bold_labels() |>
-  bold_p(t = 0.05)
+#| eval: false
+# ---- Tamaño de muestra CRT continuo con ajuste por baseline (sin paquetes) ----
+alpha <- 0.05
+power <- 0.80
 
-tbl_1_data
+sigma <- 8.73     # SD SBP (Liang)
+r     <- 0.60     # corr baseline-followup
+ICC   <- 0.02
+m     <- 32       # niños por colegio (follow-up completo)
+Delta <- 2.21     # mmHg (Liang)
 
-# Limpiar tablas
-# Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
+z_alpha <- qnorm(1 - alpha/2)
+z_beta  <- qnorm(power)
+
+vart_adj <- sigma^2 * (1 - r^2)           # ajuste por baseline
+DE <- 1 + (m - 1) * ICC                   # design effect
+
+k_per_arm <- ((z_alpha + z_beta)^2 * 2 * vart_adj * DE) / (m * Delta^2)
+K_total   <- ceiling(2 * k_per_arm)
+
+k_per_arm
+K_total
+
+loss <- 0.10  # 10%
+m_recruit <- ceiling(m / (1 - loss))
+N_recruit <- K_total * m_recruit
+
+m_recruit
+N_recruit
 ```
 
