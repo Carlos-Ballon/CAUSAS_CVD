@@ -761,7 +761,13 @@ data_clear <- data_clear |>
       ~ case_match(.x, "Negativo" ~ "No", "Positivo" ~ "Yes")
     ),
     
-    across(c(asma, rinitis_alergica), ~ fct_recode(.x, "Yes" = "Sí")),
+    across(c(
+      asma, rinitis_alergica, lme_6meses, edad_solidos, hospitalizado_nino_nacer,
+      enf_bajopeso_prematuro, enf_macrosomia, enf_dm1, enf_resit_insulina, 
+      enf_dislipidemias, inf_respirat_recurrentes, hospita_previas, vacunas,
+      ant_familiar_pulmon, ant_diabetes2, ant_hta, ant_fenf_cardiov, 
+      ant_dislipidemias, ant_cancer, ant_obesidad, ant_familiar_otros), 
+      ~ fct_recode(.x, "Yes" = "Sí")),
     
     # --- MÓDULO ASMA ---
     # Prevalencia de vida: ¿Alguna vez pitos?
@@ -806,6 +812,8 @@ tbl_1 <- data_clear |>
     digits = list(
       all_continuous() ~ c(2, 2),
       all_categorical()~ c(1, 1)),
+    label = list(
+      seguro_de_salud_adolescente ~ "Seguro de Salud del adolescente"),
     missing = "no"
   ) |>
   add_overall() |>
@@ -813,7 +821,7 @@ tbl_1 <- data_clear |>
   bold_p(t = 0.05) |>
   modify_header(
     all_stat_cols() ~ "**{level}** (n = {n})",
-    label = "**Caraterísticas**",
+    label = "**Características**",
     stat_0 = "**Total** (n = {n})") |>
   modify_spanning_header(all_stat_cols(stat_0 = FALSE) ~ "**Colegio**")
 ```
@@ -835,7 +843,7 @@ tbl_2 <- data_clear |>
     label = list(
       hospitalizado_nino_nacer ~ "Hospitalización al nacer",
       enf_bajopeso_prematuro ~ "Bajo peso al nacer o prematuridad (37 semanas)",
-      enf_macrosomia ~ "Macrosomía (peso mayor de 4 Kg al nacer)",
+      enf_macrosomia ~ "Macrosomía (peso > 4 Kg al nacer)",
       enf_dm1 ~ "Diabetes Mellitus tipo 1",
       enf_resit_insulina ~ "Resistencia a la insulina",
       enf_dislipidemias ~ "Dislipidemia",
@@ -843,7 +851,7 @@ tbl_2 <- data_clear |>
       hospita_previas ~ "Hospitalizaciones previas este año",
       vacunas ~ "Vacunas al día este año"
     ),
-    missing = "ifany"
+    missing = "no"
   ) |>
   add_overall() |>
   add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
@@ -863,14 +871,14 @@ tbl_3 <- data_clear |>
       all_continuous() ~ c(2, 2),
       all_categorical()~ c(1, 1)),
     label = list(
-      ant_familiar_pulmon ~ "Antecedente familiar de enfermedad pulmonar",
-      ant_diabetes2 ~ "Antecedente familiar de Diabetes Mellitus 2",
-      ant_hta ~ "Antecedente familiar de HTA",
-      ant_fenf_cardiov ~ "Antecedente familiar de CVD",
-      ant_dislipidemias ~ "Antecedente familiar de dislipidemias",
-      ant_cancer ~ "Antecedente familiar de cáncer",
-      ant_obesidad ~ "Antecedente familiar de obesidad",
-      ant_familiar_otros ~ "Otro antecedentes familiar"
+      ant_familiar_pulmon ~ "Enfermedad pulmonar",
+      ant_diabetes2 ~ "Diabetes mellitus tipo 2",
+      ant_hta ~ "HTA",
+      ant_fenf_cardiov ~ "CVD",
+      ant_dislipidemias ~ "Dislipidemias",
+      ant_cancer ~ "Cáncer",
+      ant_obesidad ~ "Obesidad",
+      ant_familiar_otros ~ "Otros"
     ),
     missing = "no"
   ) |>
@@ -930,7 +938,7 @@ tbl_4 <- data_clear |>
 #   bold_p(t = 0.05)
 ```
 
-## Tabla 6. Alegias, asma y rinitis
+## Tabla 6. Alergias, asma y rinitis
 
 ```{r}
 tbl_6 <- data_clear |>
@@ -1104,23 +1112,49 @@ tbl_11 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
+## Tabla 12. Espirometría
+
+```{r}
+tbl_12 <- data_clear |>
+  dplyr::select(
+    fvc_maximo, fev1_maximo, pef_maximo, fev1_fvc_ratio, interpretacion_espiro,
+    cluster) |>
+  tbl_summary(
+    by = cluster,
+    digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
+    statistic = list(all_categorical() ~"{n} ({p}%)"),
+    label = list(
+      fvc_maximo ~ "Capacidad Vital Forzada (FVC)",
+      fev1_maximo ~ "Volumen Espiratorio Forzado en el Primer Segundo (FEV1)",
+      pef_maximo ~ "Pico Espiratorio Forzado (PEF)",
+      fev1_fvc_ratio ~ "Índice FEV1/FVC",
+      interpretacion_espiro ~ "Interpretación"
+      ),
+    missing = "no") |>
+  add_overall() |>
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
+  bold_labels() |>
+  bold_p(t = 0.05)
+```
+
 # Tablas unidas
 
 ```{r}
 # Stack tables
 tables = tbl_stack(
-  list(tbl_1, tbl_2, tbl_3, tbl_4, tbl_6, tbl_7, tbl_8, tbl_9, tbl_10, tbl_11),
+  list(tbl_1, tbl_2, tbl_3, tbl_4, tbl_6, tbl_7, tbl_8, tbl_9, tbl_10, tbl_11, tbl_12),
   group_header = c(
     "Características socioeconómicas del pariente",
     "Antecedentes de la primera infancia y actuales",
     "Antecedentes familiares",
     "Salud mental, nutrición y actividad física",
-    "Alegias, asma y rinitis",
+    "Alergias, asma y rinitis",
     "ISAAC",
     "Biomarcadores",
     "Antropometría",
     "Índices",
-    "Porcentaje de grasa corporal"),
+    "Porcentaje de grasa corporal",
+    "Espirometría"),
   quiet = TRUE
   )
 
