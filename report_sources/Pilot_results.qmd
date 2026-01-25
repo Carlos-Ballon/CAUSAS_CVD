@@ -144,7 +144,7 @@ data_clear <- data |>
       fct_relevel("Masculino", "Femenino"),
     
     # Edad
-    edad_anios = coalesce(edad_adolescente, 11),
+    edad_anios = coalesce(edad_adolescente, 12),
     edad_meses = edad_anios * 12,
     
     # Peso
@@ -233,6 +233,16 @@ data_clear <- data |>
     TyG_BMI_q4 = ntile(TyG_BMI, 4),
     TyG_WHtR_q4 = ntile(TyG_WHtR, 4),
     TG_HDL_q4 = ntile(TG_HDL, 4),
+    
+    TG_HDL = case_when(
+      hdl_colesterol < 110 & trigliceridos < 170 ~ "Aceptable",
+      
+      # Si uno de los dos es "Alto", la categoría es "Alto" (prioridad)
+      hdl_colesterol >= 130 | trigliceridos >= 200 ~ "Alto",
+      
+      (hdl_colesterol >= 110 & hdl_colesterol < 130) |
+        (trigliceridos >= 170 & trigliceridos < 200) ~ "Límite"
+    ), 
     
     # Sumatoria de pliegues (TR + SE)
     suma_pliegues = (pliegue_tricipital + pliegue_subescapular) / 2,
