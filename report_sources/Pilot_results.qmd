@@ -229,12 +229,18 @@ data_clear <- data |>
     TyG_WHtR = TyG * indice_cintura_talla,
     TG_HDL = trigliceridos / hdl_colesterol,
     
-    TyG_WC_q4 = ntile(TyG_WC, 4),
-    TyG_BMI_q4 = ntile(TyG_BMI, 4),
-    TyG_WHtR_q4 = ntile(TyG_WHtR, 4),
-    TG_HDL_q4 = ntile(TG_HDL, 4),
+    across(
+      c(TyG_WC, TyG_BMI, TyG_WHtR, TG_HDL),
+      ~ cut(
+        .,
+        breaks = quantile(., probs = seq(0, 1, 0.25), na.rm = TRUE),
+        include.lowest = TRUE,
+        labels = FALSE
+      ),
+      .names = "{.col}_q4"
+    ), 
     
-    TG_HDL = case_when(
+    TG_HDL_dx = case_when(
       hdl_colesterol < 110 & trigliceridos < 170 ~ "Aceptable",
       
       # Si uno de los dos es "Alto", la categoría es "Alto" (prioridad)
@@ -376,7 +382,7 @@ data_clear <- data |>
     sex_pedbp = if_else(sexo == 1, 1, 0))
 
 # Pediatric Blood Pressure Distribution
-bp_results <- p_bp(
+bp_percentiles <- p_bp(
   q_sbp = data_clear$PAS,
   q_dbp = data_clear$PAD,
   age   = data_clear$edad_meses,
@@ -384,17 +390,64 @@ bp_results <- p_bp(
   height = data_clear$talla_cm
 )
 
+bp_p95_reference <- q_bp(
+  p_sbp = bp_percentiles$sbp_p,
+  p_dbp = bp_percentiles$dbp_p,
+  age   = data_clear$edad_meses,
+  male  = data_clear$sex_pedbp,
+  height = data_clear$talla_cm
+)
+
 data_clear <- data_clear |>
   mutate(
+    crit_tg = if_else(trigliceridos_mmol >= 1.24, 1, 0),
+    crit_hdl = if_else(hdl_mmol <= 1.03, 1, 0),
+    crit_glucosa = if_else(glucosa_mmol >= 5.6, 1, 0),
+    
+    # 1. Percentiles (escala 0-100)
+    sbp_p = bp_percentiles$sbp_p * 100,
+    dbp_p = bp_percentiles$dbp_p * 100,
+    
+    # 2. Umbrales de referencia
+    p95_sbp_mmHg = bp_p95_reference$sbp,
+    p95_dbp_mmHg = bp_p95_reference$dbp,
     
     # SBP and/or DBP ≥ 90th percentile for age, sex and height
-    sbp_p = bp_results$sbp_p * 100,
-    dbp_p = bp_results$dbp_p * 100,
-    
+    p95_bp = if_else(sbp_p >= 95 | dbp_p >= 90, 1, 0),
     p90_bp = if_else(sbp_p >= 90 | dbp_p >= 90, 1, 0),
-    crit_tg   = if_else(trigliceridos_mmol >= 1.24, 1, 0),
-    crit_hdl  = if_else(hdl_mmol <= 1.03, 1, 0),
-    crit_glucosa  = if_else(glucosa_mmol >= 5.6, 1, 0),
+    
+    # 3. Clasificación
+    bp_category = case_when(
+      # --- REGLA PARA >= 13 AÑOS ---
+      edad_anios >= 13 ~ case_when(
+        PAS >= 140 | PAD >= 90 ~ "Hipertensión Etapa 2",
+        PAS >= 130 | PAD >= 80 ~ "Hipertensión Etapa 1",
+        PAS >= 120 & PAD < 80  ~ "Elevada",
+        PAS < 120 & PAD < 80   ~ "Normal",
+        TRUE ~ "No clasificado"
+      ),
+      
+      # --- REGLA PARA < 13 AÑOS ---
+      edad_anios < 13 ~ case_when(
+        # Etapa 2: >= (P95 + 12 mmHg)
+        PAS >= (p95_sbp_mmHg + 12) | PAD >= (p95_dbp_mmHg + 12) ~ "Hipertensión Etapa 2",
+        
+        # Etapa 1: >= P95
+        sbp_p >= 95 | dbp_p >= 95 ~ "Hipertensión Etapa 1",
+        
+        # Elevada: >= P90 O >= 120/80
+        sbp_p >= 90 | dbp_p >= 90 ~ "Elevada",
+        
+        # Normal: Todo lo que no entró en las anteriores y tiene datos!is.na(PAS) &
+        sbp_p < 90 & dbp_p < 90 ~ "Elevada",
+        
+        TRUE ~ "No clasificado"
+      )
+    ),
+    # Convertimos a factor ordenado para análisis posterior
+    bp_category = factor(bp_category) |>
+      fct_relevel("Normal", "Elevada", "Hipertensión Etapa 1", "Hipertensión Etapa 2") |>
+      ff_label("Diagnóstico de hipertensión arterial en adolescentes"),
     
     # Sumamos los criterios presentes
     n_metabolic_abnormalities = rowSums(across(c(
@@ -816,6 +869,8 @@ data_clear <- data_clear |>
     ) |>
     ff_label("PM2.5")
   )
+
+saveRDS(data_clear, here("data", "data_shiny.rds"))
 ```
 
 ## Tabla 1. Características socioeconómicas del pariente
@@ -1027,7 +1082,7 @@ tbl_7 <- data_clear |>
 tbl_8 <- data_clear |>
   dplyr::select(
     glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
-    TyG, VAI, metabolic_health, TyG, colegio_id) |>
+    TyG, VAI, metabolic_health, bp_category, colegio_id) |>
   tbl_summary(
     by = colegio_id,
     digits = list(all_continuous() ~ c(2, 2)),
