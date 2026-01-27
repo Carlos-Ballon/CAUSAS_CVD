@@ -23,7 +23,8 @@ pacman::p_load(
   childsds,
   pedbp,
   finalfit,
-  pwr
+  pwr,
+  corrplot
 )
 
 # Scripts
@@ -923,10 +924,10 @@ data_clear <- data_clear |>
       ff_label("Inicio de alimentación complementaria"),
     
     enfermedad_pulmonar = case_when(
-      enf_pulmonares_rinitis_alergica == "Sí" ~ "Rinitis alérgica",
-      enf_pulmonares_asma == "Sí" ~ "Asma",
-      enf_pulmonares_bronquitis_cronica == "Sí" ~ "Bronquitis crónica",
-      enf_pulmonares_ninguna == "Sí" ~ "Ninguna",
+      enf_pulmonares_rinitis_alergica == "Yes" ~ "Rinitis alérgica",
+      enf_pulmonares_asma == "Yes" ~ "Asma",
+      enf_pulmonares_bronquitis_cronica == "Yes" ~ "Bronquitis crónica",
+      enf_pulmonares_ninguna == "Yes" ~ "Ninguna",
       TRUE ~ NA_character_) |>
       fct_relevel(
         "Rinitis alérgica", "Asma", "Bronquitis crónica", "Ninguna") |>
