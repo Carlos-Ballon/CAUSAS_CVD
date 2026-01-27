@@ -31,7 +31,6 @@ runtime: shiny
 </style>
 ```
 
-
 ```{r include=FALSE}
 library(flexdashboard)
 library(rio)
