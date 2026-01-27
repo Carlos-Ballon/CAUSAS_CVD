@@ -38,6 +38,7 @@ library(rio)
 library(here)
 library(tidyverse)
 library(shiny)
+library(shinyscreenshot)
 
 # Esto le dice a Shiny: "Busca en la carpeta donde está este archivo y monta 'www'"
 shiny::addResourcePath(prefix = "www", directoryPath = here::here("report_sources", "www"))
@@ -96,10 +97,37 @@ hr() # Línea horizontal
 # Botón de descarga
 h4("Exportar Resultados")
 helpText("Descargue un informe detallado para entregar a los padres.")
+uiOutput("botones_captura_ui")
 
-radioButtons("format", "Formato de documento:", c("Word (.docx)" = "docx", "PDF (.pdf)" = "pdf"), inline = TRUE)
+# Función auxiliar para no repetir código
+# boton_hd <- function(id, label, color) {
+#   shinyscreenshot::screenshotButton(
+#     label = label,
+#     id = id,
+#     filename = paste0(id, "_", Sys.Date()),
+#     scale = 3,
+#     class = paste0("btn-", color),
+#     style = "width: 100%; margin-bottom: 5px; font-size: 12px; font-weight: bold; padding: 15px;"
+#   )
+# }
 
-downloadButton("descargar_reporte", "Generar Informe")
+# Lista de botones individuales compactos
+# boton_hd("seccion_salud_metabolica", "Salud Metabólica", "info")
+# boton_hd("seccion_salud_cardiovascular", "Salud cardiovascular", "success")
+# boton_hd("seccion_perfil_lipidico", "Perfil lipidico", "info")
+# boton_hd("seccion_sindrome_metabolico", "Sindrome Metabólico", "success")
+
+# hr() # Separador
+
+# boton_hd("seccion_clinica", "Salud metabólica y cardiovascular", "primary")
+# boton_hd("seccion_salud_mental", "Salud mental y alergias", "primary")
+# boton_hd("seccion_espirometria", "Espirometría", "primary")
+
+# hr()
+
+# radioButtons("format", "Formato de documento:", c("Word (.docx)" = "docx", "PDF (.pdf)" = "pdf"), inline = TRUE)
+
+# downloadButton("descargar_reporte", "Generar Informe")
 ```
 
 ```{r}
@@ -110,7 +138,7 @@ datos_alumno <- reactive({
   data_shiny |> dplyr::filter(record_id == input$nino_seleccionado)
 })
 
-#  Mostrar la firma en el dashboard
+# Mostrar la firma en el dashboard
 output$firma_medico <- renderUI({
   # Forzamos la ruta relativa correcta
   img_path <- "www/firma_medico.png"
@@ -123,38 +151,24 @@ output$firma_medico <- renderUI({
   )
 })
 
-# Manejador de descarga
-output$descargar_reporte <- downloadHandler(
-  filename = function() {
-    paste0(
-      "Informe_Salud_",
-      gsub(" ", "_", input$nino_seleccionado),
-      "_",
-      Sys.Date(),
-      ".",
-      input$format
+output$botones_captura_ui <- renderUI({
+  # Obtenemos los datos del niño seleccionado actualmente
+  d <- datos_alumno()
+  
+  # Limpiamos el nombre para que no tenga caracteres raros en el nombre de archivo
+  nombre_archivo <- gsub(" ", "_", d$record_id)
+  
+  tagList(
+    # Botón para descargar el reporte completo
+    shinyscreenshot::screenshotButton(
+      label = "Descargar",
+      filename = paste0("Reporte_", nombre_archivo, "_", Sys.Date()),
+      scale = 3,
+      class = "btn-primary",
+      style = "width: 100%; margin-bottom: 10px; font-weight: bold;", 
     )
-  },
-  content = function(file) {
-    # Crear un entorno temporal para pasar las variables al reporte
-    tempReport <- file.path(tempdir(), "reporte_padres.Rmd")
-    
-    # Asegúrate de tener el archivo 'reporte_padres.Rmd' en la misma carpeta que este script
-    file.copy("reporte_padres.Rmd", tempReport, overwrite = TRUE)
-    
-    # Parámetros a pasar al Rmd
-    params <- list(nino = input$nino_seleccionado, datos = datos_alumno())
-    
-    # Renderizar
-    rmarkdown::render(
-      tempReport,
-      output_file = file,
-      params = params,
-      output_format = ifelse(input$format == "pdf", "pdf_document", "word_document"),
-      envir = new.env(parent = globalenv())
-    )
-  }
-)
+  )
+})
 ```
 
 ## Fila 1 {data-height=120}
@@ -162,7 +176,7 @@ output$descargar_reporte <- downloadHandler(
 ### Salud metabólica (WGOC)
 
 ```{r}
-renderValueBox({
+div(id = "seccion_salud_metabólica", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
     d$metabolic_health == "Metabólicamente saludable" ~ "danger",
@@ -170,13 +184,13 @@ renderValueBox({
     TRUE ~ "primary"
   )
   valueBox(d$metabolic_health, icon = "fa-user-md", color = color_diag)
-})
+}))
 ```
 
 ### Salud cardiovascular (AAP)
 
 ```{r}
-renderValueBox({
+div(id = "seccion_salud_cardiovascular", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
     d$bp_category == "Hipertensión Etapa 2" ~ "danger",
@@ -186,13 +200,13 @@ renderValueBox({
     TRUE ~ "primary"
   )
   valueBox(d$bp_category, icon = "fa-heartbeat", color = color_diag)
-})
+}))
 ```
 
 ### Perfil lipídico
 
 ```{r}
-renderValueBox({
+div(id = "seccion_perfil_lipidico", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
     d$TG_HDL_dx == "Alto" ~ "danger",
@@ -201,13 +215,13 @@ renderValueBox({
     TRUE ~ "primary"
   )
   valueBox(d$TG_HDL_dx, icon = "fa-flask", color = color_diag)
-})
+}))
 ```
 
 ### Síndrome metabólico (IDF)
 
 ```{r}
-renderValueBox({
+div(id = "seccion_sindrome_metabolico", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
     d$sindrome_metabolico == "Sí" ~ "danger",
@@ -215,15 +229,15 @@ renderValueBox({
     TRUE ~ "primary"
   )
   valueBox(d$sindrome_metabolico, icon = "fa-solid fa-droplet", color = color_diag)
-})
+}))
 ```
 
 ## Fila 2 {data-height=530}
 
-### Detalles Clínicos Completos
+### Salud metabólica y cardiovascular
 
 ```{r}
-renderTable({
+div(id = "seccion_clinica", renderTable({
   d <- datos_alumno()
   data.frame(
     "Indicador" = c(
@@ -268,7 +282,7 @@ renderTable({
       d$indice_cintura_cadera,
       d$indice_cintura_talla,
       d$TG_HDL_ratio
-
+      
     ),
     "Referencia" = c(
       "-", # Nombres y apellidos
@@ -292,13 +306,13 @@ renderTable({
       "< 2.2" # Índice TG/HDL
     )
   )
-}, width = "100%")
+}, width = "100%"))
 ```
 
 ### Salud mental y alergias
 
 ```{r}
-renderTable({
+div(id = "seccion_salud_mental", renderTable({
   d <- datos_alumno()
   data.frame(
     "Indicador" = c(
@@ -323,9 +337,12 @@ renderTable({
       "Eczema/Dermatitis actual"
     ),
     "Resultado" = c(
-      as.character(d$depresion),           # Forzamos a texto para evitar el número
-      as.character(d$ansiedad),            # Forzamos a texto para evitar el número
-      as.character(d$categoria_afhc),      # Por seguridad, si es factor también
+      as.character(d$depresion),
+      # Forzamos a texto para evitar el número
+      as.character(d$ansiedad),
+      # Forzamos a texto para evitar el número
+      as.character(d$categoria_afhc),
+      # Por seguridad, si es factor también
       as.character(d$paqc_dx),
       as.character(d$dinamometria),
       as.character(d$alergia_pteronyssinus),
@@ -348,30 +365,63 @@ renderTable({
       as.character(d$GAD_7),
       as.character(d$afhc_score),
       as.character(d$paqc_final_score),
-      "-", "-", "-", "-", "-", "-", "-", "-", 
-      "-", "-", "-", "-", "-", "-", "-"
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-"
     ),
     "Referencia" = c(
-      "PHQ-9", "GAD-7", "AFHC", "PAQ-A", "< 25", 
-      "-", "-", "-", "-", "-", "-", "-", "-", 
-      "ISAAC", "ISAAC", "ISAAC","ISAAC", "ISAAC", "ISAAC"
+      "PHQ-9",
+      "GAD-7",
+      "AFHC",
+      "PAQ-A",
+      "< 25",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC"
     )
   )
-}, width = "100%")
+}, width = "100%"))
 ```
 
 ### Espirometría y responsable
 
 ```{r}
-# Todo en una sola columna para que queden uno encima del otro
-fluidRow(column(
-  width = 12, # Ocupa todo el ancho disponible
-  
-  # Estilo CSS local para reducir el espacio desperdiciado en la tabla
-  tags$style(HTML("
-    .table-condensed { font-size: 13px; }
-    .well { padding: 10px !important; margin-bottom: 0px !important; }
-  ")),
+div(
+  id = "seccion_espirometria",
+  # Todo en una sola columna para que queden uno encima del otro
+  fluidRow(column(
+    width = 12,
+    # Ocupa todo el ancho disponible
+    
+    # Estilo CSS local para reducir el espacio desperdiciado en la tabla
+    tags$style(
+      HTML(
+        ".table-condensed { font-size: 13px; }.well { padding: 10px !important; margin-bottom: 0px !important; }"
+      )
+    ),
   
   # BLOQUE SUPERIOR: Tabla de Espirometría
   renderTable({
@@ -395,22 +445,22 @@ fluidRow(column(
     )
   }, width = "100%", spacing = "s", class = "table-condensed"),
   
-  br(), # Espacio de separación
+  br(),
+  # Espacio de separación
   
   # BLOQUE INFERIOR: Datos de consulta y Firma
   wellPanel(fluidRow(
     column(
       width = 5,
-      h4("Datos de la Consulta"),
+      h4("Información de consulta"),
       p(strong("Fecha:"), format(Sys.Date(), "%d/%m/%Y")),
       hr(),
       p("MD. Ana Lucia Alcántara Diaz (CMP: 101709)")
-    ),
-    column(
-      width = 6, 
-      p(strong( "Firma del Especialista:")), 
-    uiOutput("firma_medico"))
+    ), column(width = 6, p(strong(
+      "Firma del especialista:"
+    )), uiOutput("firma_medico"))
   ))
-))
+  ))
+)
 ```
 
