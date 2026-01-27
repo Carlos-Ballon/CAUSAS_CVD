@@ -74,7 +74,7 @@ data_clear <- data |>
         "024 - Ghia Mujica Encizo",
         "025 - Mia Guillen Flores",
         "026 - Jheynny Arirama Amante",
-        "027 - Naomi Reyes Napam",
+        "027 - Naomi ReSí Napam",
         "031 - Briyith Amasifuen Castro",
         "032 - Anahi Mia Anhuaman",
         "033 - Kiara Chuquizuta Ramos",
@@ -124,7 +124,7 @@ data_clear <- data |>
         "029 - Caleb Casabona Vega",
         "030 - Alessandro Tito Toscano",
         "036 - Jann Oliver Estevan Echevarria",
-        "037 - Daniel Reyes Santi",
+        "037 - Daniel ReSí Santi",
         "038 - Evan Rojas Rojas",
         "039 - Thiago Huarcaya Huaman",
         "042 - Roy Huaron Aranda",
@@ -923,10 +923,10 @@ data_clear <- data_clear |>
       ff_label("Inicio de alimentación complementaria"),
     
     enfermedad_pulmonar = case_when(
-      enf_pulmonares_rinitis_alergica == "Yes" ~ "Rinitis alérgica",
-      enf_pulmonares_asma == "Yes" ~ "Asma",
-      enf_pulmonares_bronquitis_cronica == "Yes" ~ "Bronquitis crónica",
-      enf_pulmonares_ninguna == "Yes" ~ "Ninguna",
+      enf_pulmonares_rinitis_alergica == "Sí" ~ "Rinitis alérgica",
+      enf_pulmonares_asma == "Sí" ~ "Asma",
+      enf_pulmonares_bronquitis_cronica == "Sí" ~ "Bronquitis crónica",
+      enf_pulmonares_ninguna == "Sí" ~ "Ninguna",
       TRUE ~ NA_character_) |>
       fct_relevel(
         "Rinitis alérgica", "Asma", "Bronquitis crónica", "Ninguna") |>
@@ -936,7 +936,7 @@ data_clear <- data_clear |>
     
     across(
       alergia_pteronyssinus:alergia_olivo,
-      ~ case_match(.x, "Negativo" ~ "No", "Positivo" ~ "Yes")
+      ~ case_match(.x, "Negativo" ~ "No", "Positivo" ~ "Sí")
     ),
     
     across(c(
@@ -945,7 +945,7 @@ data_clear <- data_clear |>
       enf_dislipidemias, inf_respirat_recurrentes, hospita_previas, vacunas,
       ant_familiar_pulmon, ant_diabetes2, ant_hta, ant_fenf_cardiov, 
       ant_dislipidemias, ant_cancer, ant_obesidad, ant_familiar_otros), 
-      ~ fct_recode(.x, "Yes" = "Sí")),
+      ~ fct_recode(.x, "Sí" = "Sí")),
     
     # --- MÓDULO ASMA ---
     # Prevalencia de vida: ¿Alguna vez pitos?
