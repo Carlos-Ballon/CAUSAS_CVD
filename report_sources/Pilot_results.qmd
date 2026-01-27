@@ -74,7 +74,7 @@ data_clear <- data |>
         "024 - Ghia Mujica Encizo",
         "025 - Mia Guillen Flores",
         "026 - Jheynny Arirama Amante",
-        "027 - Naomi ReSí Napam",
+        "027 - Naomi Reyes Napam",
         "031 - Briyith Amasifuen Castro",
         "032 - Anahi Mia Anhuaman",
         "033 - Kiara Chuquizuta Ramos",
@@ -124,7 +124,7 @@ data_clear <- data |>
         "029 - Caleb Casabona Vega",
         "030 - Alessandro Tito Toscano",
         "036 - Jann Oliver Estevan Echevarria",
-        "037 - Daniel ReSí Santi",
+        "037 - Daniel Reyes Santi",
         "038 - Evan Rojas Rojas",
         "039 - Thiago Huarcaya Huaman",
         "042 - Roy Huaron Aranda",
@@ -412,7 +412,7 @@ data_clear <- data |>
       )
     ), na.rm = TRUE),
 
-    sex_pedbp = if_else(sexo == 1, 1, 0))
+    sex_pedbp = ifelse(sexo == 1, 1, 0))
 
 # Pediatric Blood Pressure Distribution
 bp_percentiles <- p_bp(
