@@ -1,0 +1,416 @@
+---
+title: "Monitor de Salud Escolar"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    theme: simplex
+runtime: shiny
+---
+
+```{css}
+<style>
+/* Fondo de los cuadros con colores pastel amigables */
+.bg-success { background-color: #d4edda !important; } /* Verde pastel */
+.bg-warning { background-color: #fff3cd !important; } /* Amarillo pastel */
+.bg-danger  { background-color: #f8d7da !important; } /* Rojo/Rosa pastel */
+.bg-primary { background-color: #d1ecf1 !important; } /* Azul pastel */
+
+/* Color de letra amigable (Gris Carbón Oscuro) para legibilidad */
+.value-box .value, 
+.value-box .caption, 
+.value-box .icon i {
+  color: #2c3e50 !important; /* Un gris azulado oscuro muy profesional */
+}
+
+/* Ajuste de sombras para que se vean modernos */
+.value-box {
+  border: none !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+</style>
+```
+
+
+```{r include=FALSE}
+library(flexdashboard)
+library(rio)
+library(here)
+library(tidyverse)
+library(shiny)
+
+# Esto le dice a Shiny: "Busca en la carpeta donde está este archivo y monta 'www'"
+shiny::addResourcePath(prefix = "www", directoryPath = here::here("report_sources", "www"))
+
+# Carga de datos
+data_shiny <- readRDS(here::here("data/data_shiny.rds"))
+
+data_shiny <- data_shiny |>
+  dplyr::select(
+    # ID
+    record_id, sexo_factor, edad_anios,
+    
+    # Salud mental
+    PHQ_9,
+    depresion, GAD_7, ansiedad, afhc_score, dinamometria,
+    categoria_afhc, paqc_final_score, paqc_dx,
+    
+    # Alergias
+    alergia_pteronyssinus, alergia_farinae, alergia_destructor, 
+    alergia_tropicalis, alergia_perro, alergia_germanica, asma, rinitis_alergica,
+    feno,
+    
+    # ISAAC
+    asma_vida, asma_actual, asma_severa, rinitis_actual, rinoconjuntivitis, 
+    eczema_actual,
+    
+    # Biomarcadores
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
+    metabolic_health, TG_HDL_dx, bp_category, crit_tg, crit_hdl, crit_glucosa,
+    TG_HDL_ratio, TyG, sindrome_metabolico, VAI_sindrome_metabolico,
+    
+    # Antropometria
+    peso_kg, talla_m, imc, zbfa_dx, zhfa_dx, grasa_ip, VAI, indice_cintura_cadera, 
+    indice_cintura_talla, dinamometria, absi, 
+    
+    # Espirometria
+    fvc_maximo, fev1_maximo, pef_maximo, fev1_fvc_ratio, clasificacion_espiro
+  ) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
+```
+
+# Panel Principal {data-icon="fa-dashboard"}
+
+## Barra Lateral {.sidebar}
+
+### Selección de adolescente
+
+```{r}
+selectInput(
+  "nino_seleccionado",
+  label = "Seleccione el nombre del adolescente:",
+  choices = data_shiny$record_id)
+
+hr() # Línea horizontal
+
+# Botón de descarga
+h4("Exportar Resultados")
+helpText("Descargue un informe detallado para entregar a los padres.")
+
+radioButtons("format", "Formato de documento:", c("Word (.docx)" = "docx", "PDF (.pdf)" = "pdf"), inline = TRUE)
+
+downloadButton("descargar_reporte", "Generar Informe")
+```
+
+```{r}
+# LÓGICA REACTIVA
+# Filtramos por record_id que es el valor que viene del selectInput
+datos_alumno <- reactive({
+  req(input$nino_seleccionado)
+  data_shiny |> dplyr::filter(record_id == input$nino_seleccionado)
+})
+
+#  Mostrar la firma en el dashboard
+output$firma_medico <- renderUI({
+  # Forzamos la ruta relativa correcta
+  img_path <- "www/firma_medico.png"
+  
+  tags$img(
+    src = img_path, 
+    height = "100px",
+    alt = "Firma no encontrada",
+    style = "display: block; margin-left: auto; margin-right: auto;"
+  )
+})
+
+# Manejador de descarga
+output$descargar_reporte <- downloadHandler(
+  filename = function() {
+    paste0(
+      "Informe_Salud_",
+      gsub(" ", "_", input$nino_seleccionado),
+      "_",
+      Sys.Date(),
+      ".",
+      input$format
+    )
+  },
+  content = function(file) {
+    # Crear un entorno temporal para pasar las variables al reporte
+    tempReport <- file.path(tempdir(), "reporte_padres.Rmd")
+    
+    # Asegúrate de tener el archivo 'reporte_padres.Rmd' en la misma carpeta que este script
+    file.copy("reporte_padres.Rmd", tempReport, overwrite = TRUE)
+    
+    # Parámetros a pasar al Rmd
+    params <- list(nino = input$nino_seleccionado, datos = datos_alumno())
+    
+    # Renderizar
+    rmarkdown::render(
+      tempReport,
+      output_file = file,
+      params = params,
+      output_format = ifelse(input$format == "pdf", "pdf_document", "word_document"),
+      envir = new.env(parent = globalenv())
+    )
+  }
+)
+```
+
+## Fila 1 {data-height=120}
+
+### Salud metabólica (WGOC)
+
+```{r}
+renderValueBox({
+  d <- datos_alumno()
+  color_diag <- case_when(
+    d$metabolic_health == "Metabólicamente saludable" ~ "danger",
+    d$metabolic_health == "Metabólicamente no saludable" ~ "success",
+    TRUE ~ "primary"
+  )
+  valueBox(d$metabolic_health, icon = "fa-user-md", color = color_diag)
+})
+```
+
+### Salud cardiovascular (AAP)
+
+```{r}
+renderValueBox({
+  d <- datos_alumno()
+  color_diag <- case_when(
+    d$bp_category == "Hipertensión Etapa 2" ~ "danger",
+    d$bp_category == "Hipertensión Etapa 1" ~ "danger",
+    d$bp_category == "Elevada" ~ "warning",
+    d$bp_category == "Normal" ~ "success",
+    TRUE ~ "primary"
+  )
+  valueBox(d$bp_category, icon = "fa-heartbeat", color = color_diag)
+})
+```
+
+### Perfil lipídico
+
+```{r}
+renderValueBox({
+  d <- datos_alumno()
+  color_diag <- case_when(
+    d$TG_HDL_dx == "Alto" ~ "danger",
+    d$TG_HDL_dx == "Límite" ~ "warning",
+    d$TG_HDL_dx == "Aceptable" ~ "success",
+    TRUE ~ "primary"
+  )
+  valueBox(d$TG_HDL_dx, icon = "fa-flask", color = color_diag)
+})
+```
+
+### Síndrome metabólico (IDF)
+
+```{r}
+renderValueBox({
+  d <- datos_alumno()
+  color_diag <- case_when(
+    d$sindrome_metabolico == "Sí" ~ "danger",
+    d$sindrome_metabolico == "No" ~ "success",
+    TRUE ~ "primary"
+  )
+  valueBox(d$sindrome_metabolico, icon = "fa-solid fa-droplet", color = color_diag)
+})
+```
+
+## Fila 2 {data-height=530}
+
+### Detalles Clínicos Completos
+
+```{r}
+renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Nombres y apellidos",
+      "Sexo",
+      "Edad (años)",
+      "Peso (Kg)",
+      "Talla (Metros)",
+      "IMC para la edad",
+      "Altura para la edad",
+      "Glucosa plasmática en ayunas (mg/dL)",
+      "Triglicéridos (mg/dL)",
+      "Colesterol Total (mg/dL)",
+      "Colesterol HDL (mg/dL)",
+      "Presión Sistólica (mmHg)",
+      "Presión Diastólica (mmHg)",
+      "Porcentaje de grasa corporal",
+      "Índice de adiposidad visceral",
+      "Índice de triglicéridos-glucosa",
+      "Índice cintura-cadera",
+      "Índice cintura-talla",
+      "Índice TG/HDL"
+      
+    ),
+    "Resultado" = c(
+      d$record_id,
+      d$sexo_factor,
+      d$edad_anios,
+      d$peso_kg,
+      d$talla_m,
+      d$zbfa_dx,
+      d$zhfa_dx,
+      d$glucosa,
+      d$trigliceridos,
+      d$colesterol_total,
+      d$hdl_colesterol,
+      d$PAS,
+      d$PAD,
+      d$grasa_ip,
+      d$VAI,
+      d$TyG,
+      d$indice_cintura_cadera,
+      d$indice_cintura_talla,
+      d$TG_HDL_ratio
+
+    ),
+    "Referencia" = c(
+      "-", # Nombres y apellidos
+      "-", # Sexo
+      "-", # Edad (años)
+      "-", # Peso (Kg)
+      "-", # Talla (Metros)
+      "OMS", # IMC para la edad
+      "OMS", # Altura para la edad
+      "< 100 mg/dL", # Glucosa plasmática en ayunas (mg/dL)
+      "< 90 mg/dl", # Triglicéridos (mg/dL)
+      "< 170 mg/dL", # Colesterol Total (mg/dL)
+      "< 110 mg/dL", # Colesterol HDL (mg/dL)
+      "NHLBI/CDC", # Presión Sistólica (mmHg)
+      "NHLBI/CDC", # Presión Diastólica (mmHg)
+      "< 30%", # Porcentaje de grasa corporal
+      "< 1.775", # Índice de adiposidad visceral
+      "< 8.19", # Índice de triglicéridos-glucosa
+      "< 85", # "Índice cintura-cadera"
+      "< 0.5", # Índice cintura-talla
+      "< 2.2" # Índice TG/HDL
+    )
+  )
+}, width = "100%")
+```
+
+### Salud mental y alergias
+
+```{r}
+renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Depresión",
+      "Ansiedad",
+      "Hábitos alimentarios para adolescentes",
+      "Actividad física del adolescente",
+      "Dinapenia",
+      "Alergia al polvo",
+      "Alergia a Lepidoglyphus destructor (ácaro)",
+      "Alergia a Blomia tropicalis (ácaro)",
+      "Alergia al perro",
+      "Alergia a cucaracha pequeña",
+      "Asma",
+      "Rinitis alérgica",
+      "Fracción Exhalada de Óxido Nítrico (FeNO)",
+      "Sibilancias alguna vez",
+      "Sibilancias (últimos 12 meses)",
+      "Asma con síntomas de severidad",
+      "Rinitis (últimos 12 meses)",
+      "Rinoconjuntivitis alérgica",
+      "Eczema/Dermatitis actual"
+    ),
+    "Resultado" = c(
+      as.character(d$depresion),           # Forzamos a texto para evitar el número
+      as.character(d$ansiedad),            # Forzamos a texto para evitar el número
+      as.character(d$categoria_afhc),      # Por seguridad, si es factor también
+      as.character(d$paqc_dx),
+      as.character(d$dinamometria),
+      as.character(d$alergia_pteronyssinus),
+      as.character(d$alergia_destructor),
+      as.character(d$alergia_tropicalis),
+      as.character(d$alergia_perro),
+      as.character(d$alergia_germanica),
+      as.character(d$asma),
+      as.character(d$rinitis_alergica),
+      as.character(d$feno),
+      as.character(d$asma_vida),
+      as.character(d$asma_actual),
+      as.character(d$asma_severa),
+      as.character(d$rinitis_actual),
+      as.character(d$rinoconjuntivitis),
+      as.character(d$eczema_actual)
+    ),
+    "Puntaje" = c(
+      as.character(d$PHQ_9),
+      as.character(d$GAD_7),
+      as.character(d$afhc_score),
+      as.character(d$paqc_final_score),
+      "-", "-", "-", "-", "-", "-", "-", "-", 
+      "-", "-", "-", "-", "-", "-", "-"
+    ),
+    "Referencia" = c(
+      "PHQ-9", "GAD-7", "AFHC", "PAQ-A", "< 25", 
+      "-", "-", "-", "-", "-", "-", "-", "-", 
+      "ISAAC", "ISAAC", "ISAAC","ISAAC", "ISAAC", "ISAAC"
+    )
+  )
+}, width = "100%")
+```
+
+### Espirometría y responsable
+
+```{r}
+# Todo en una sola columna para que queden uno encima del otro
+fluidRow(column(
+  width = 12, # Ocupa todo el ancho disponible
+  
+  # Estilo CSS local para reducir el espacio desperdiciado en la tabla
+  tags$style(HTML("
+    .table-condensed { font-size: 13px; }
+    .well { padding: 10px !important; margin-bottom: 0px !important; }
+  ")),
+  
+  # BLOQUE SUPERIOR: Tabla de Espirometría
+  renderTable({
+    d <- datos_alumno()
+    data.frame(
+      "Indicador" = c(
+        "Capacidad Vital Forzada (FVC)",
+        "Volumen Espiratorio Forzado en el primer segundo (FEV1)",
+        "Índice FEV1/FVC",
+        "Pico Espiratorio Forzado (PEF)",
+        "Clasificación clínica basada en el Límite Inferior de Normalidad (LLN)"
+      ),
+      "Resultado" = c(
+        as.character(d$fvc_maximo),
+        as.character(d$fev1_maximo),
+        as.character(d$fev1_fvc_ratio),
+        as.character(d$pef_maximo),
+        as.character(d$clasificacion_espiro)
+      ),
+      "Referencia" = c("-", "-", "-", "-", "GLI-2012")
+    )
+  }, width = "100%", spacing = "s", class = "table-condensed"),
+  
+  br(), # Espacio de separación
+  
+  # BLOQUE INFERIOR: Datos de consulta y Firma
+  wellPanel(fluidRow(
+    column(
+      width = 5,
+      h4("Datos de la Consulta"),
+      p(strong("Fecha:"), format(Sys.Date(), "%d/%m/%Y")),
+      hr(),
+      p("MD. Ana Lucia Alcántara Diaz (CMP: 101709)")
+    ),
+    column(
+      width = 6, 
+      p(strong( "Firma del Especialista:")), 
+    uiOutput("firma_medico"))
+  ))
+))
+```
+
