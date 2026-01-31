@@ -24,7 +24,11 @@ pacman::p_load(
   pedbp,
   finalfit,
   pwr,
-  corrplot
+  corrplot,
+  rstatix,
+  rcompanion,
+  flextable,
+  officer
 )
 
 # Scripts
@@ -233,15 +237,15 @@ data_clear <- data |>
     WHtR_cat = if_else(indice_cintura_talla >= 0.5, "Riesgo Abdominal", "Normal"),
     
     TyG_IR = if_else(
-      TyG >= 8.19, "Riesgo de insulinorresistencia", "Sin riesgo de insulinorresistencia"),
+      TyG >= 8.19, "Insulinorresistencia", "Sin riesgo"),
     
     WHR_cardio = case_when(
       # 1. Primero filtramos si faltan datos
       is.na(indice_cintura_cadera) | is.na(indice_cintura_cadera) ~ "No evaluado", 
       
       # 2. Definimos ALTO RIESGO (Superan el corte)
-      sexo == 1 & indice_cintura_cadera >= 90 ~ "Riesgo cardiovascular", # Hombres
-      sexo == 2 & indice_cintura_cadera >= 80 ~ "Riesgo cardiovascular", # Mujeres
+      sexo == 1 & indice_cintura_cadera >= 90 ~ "Riesgo", # Hombres
+      sexo == 2 & indice_cintura_cadera >= 80 ~ "Riesgo", # Mujeres
       
       # 3. Todo lo demás es NORMAL / SIN RIESGO
       TRUE ~ "Saludable"
@@ -454,8 +458,8 @@ data_clear <- data_clear |>
     bp_category = case_when(
       # --- REGLA PARA >= 13 AÑOS ---
       edad_anios >= 13 ~ case_when(
-        PAS >= 140 | PAD >= 90 ~ "Hipertensión Etapa 2",
-        PAS >= 130 | PAD >= 80 ~ "Hipertensión Etapa 1",
+        PAS >= 140 | PAD >= 90 ~ "Elevada", # Hipertensión Etapa 2
+        PAS >= 130 | PAD >= 80 ~ "Elevada", # Hipertensión Etapa 1
         PAS >= 120 & PAD < 80  ~ "Elevada",
         PAS < 120 & PAD < 80   ~ "Normal",
         TRUE ~ "No clasificado"
@@ -465,11 +469,12 @@ data_clear <- data_clear |>
       edad_anios < 13 ~ case_when(
         # Etapa 2: >= (P95 + 12 mmHg) o >= 140/90
         PAS >= (p95_sbp_mmHg + 12) | PAD >= (p95_dbp_mmHg + 12) | 
-          PAS >= 140 | PAD >= 90 ~ "Hipertensión Etapa 2",
+          PAS >= 140 | PAD >= 90 ~ "Elevada", # Hipertensión Etapa 2
         
         # Etapa 1: >= P95 hasta < (P95 + 12) o 130/80 a 139/89
         sbp_p >= 95 | dbp_p >= 95 | 
-          (PAS >= 130 & PAS < 140) | (PAD >= 80 & PAD < 90) ~ "Hipertensión Etapa 1",
+          (PAS >= 130 & PAS < 140) |
+          (PAD >= 80 & PAD < 90) ~ "Elevada", # Hipertensión Etapa 1
         
         # Elevada: >= P90 hasta < P95 o >= 120/80
         sbp_p >= 90 | dbp_p >= 90 |  (PAS >= 120 & PAD < 80) ~ "Elevada",
@@ -482,7 +487,7 @@ data_clear <- data_clear |>
     ),
     # Convertimos a factor ordenado para análisis posterior
     bp_category = factor(bp_category) |>
-      fct_relevel("Normal", "Elevada", "Hipertensión Etapa 1", "Hipertensión Etapa 2") |>
+      fct_relevel("Normal", "Elevada") |>
       ff_label("Diagnóstico de hipertensión arterial en adolescentes"),
     
     # Sumamos los criterios presentes
@@ -516,8 +521,7 @@ data_clear <- data_clear |>
       # Para cualquier otro caso (datos faltantes)
       TRUE ~ NA_character_
     ) |>
-      fct_relevel("No", "Sí") |>
-      ff_label("Síndrome metabólico"),
+      fct_relevel("No", "Sí"),
 
     # Variable de riesgo (Binaria)
     riesgo_aterogenico = case_when(
@@ -987,7 +991,7 @@ data_clear <- data_clear |>
     ff_label("PM2.5")
   )
 
-saveRDS(data_clear, here("data", "data_shiny.rds"))
+# ?saveRDS(data_clear, here("data", "data_shiny.rds"))
 ```
 
 ```{r}
@@ -997,7 +1001,6 @@ comprobacion_espiro <- data_clear |> dplyr::select(record_id, fev1_maximo, z_fev
 
 comprobacion_espiro
 ```
-
 
 ## Tabla 1. Características socioeconómicas del pariente
 
@@ -1208,7 +1211,9 @@ tbl_7 <- data_clear |>
 tbl_8 <- data_clear |>
   dplyr::select(
     glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
-    TyG, VAI, metabolic_health, bp_category, colegio_id) |>
+    TyG, VAI, metabolic_health, bp_category, TyG_IR, TG_HDL_dx, WHR_cardio,
+    VAI_sindrome_metabolico, sindrome_metabolico, riesgo_aterogenico, 
+    colegio_id) |>
   tbl_summary(
     by = colegio_id,
     digits = list(all_continuous() ~ c(2, 2)),
@@ -1275,7 +1280,7 @@ tbl_9 <- data_clear |>
 tbl_10 <- data_clear |>
   dplyr::select(
     perimetro_cintura, perimetro_cadera, indice_cintura_cadera, indice_cintura_talla, 
-    TyG_WC, TyG_BMI, TyG_WHtR, TG_HDL_ratio, colegio_id) |>
+    TyG_WC, TyG_BMI, TyG_WHtR, TG_HDL_ratio, WHtR_cat, absi, colegio_id) |>
   tbl_summary(
     by = colegio_id,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
@@ -1414,8 +1419,211 @@ tables = tbl_stack(
 tables
 ```
 
-Limpiar tablas
-Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
+## Tablas manuscrito
+
+```{r}
+# Wilcoxon Effect Size
+# my_ES_test <- function(data, variable, by, ...) {
+#   rstatix::wilcox_effsize(data, as.formula(glue::glue("{variable} ~ {by}")))$effsize
+# }
+
+# Cohen's d
+# my_ES_test <- function(data, variable, by, ...) {
+#   rstatix::cohens_d(data, as.formula(glue::glue("{variable} ~ {by}")))$effsize
+# }
+
+# Cramer's V
+# my_cramer_v <- function(data, variable, by, ...) {
+#   table(data[[variable]], data[[by]]) |>
+#     rstatix::cramer_v()
+# }
+
+# Kruskal-Wallis Effect Size (Eta cuadrado)
+my_ES_kruskal <- function(data, variable, by, ...) {
+  res <- rstatix::kruskal_effsize(data, as.formula(glue::glue("{variable} ~ {by}")))
+  paste0(sprintf("%.3f", res$effsize), " ‡")
+}
+
+# Cramer's V
+my_cramer_v <- function(data, variable, by, ...) {
+  v <- rstatix::cramer_v(table(data[[variable]], data[[by]]))
+  paste0(sprintf("%.3f", v), " †")
+}
+
+# my_ES_test(data_clear, "glucosa", "colegio_id")
+# my_cramer_v(data_clear, "metabolic_health", "colegio_id")
+```
+
+```{r}
+#| eval: false
+#| include: false
+tbl_8 <- data_clear |>
+  dplyr::select(
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
+    TyG, VAI, metabolic_health, bp_category, TyG_IR, TG_HDL_dx, WHR_cardio,
+    VAI_sindrome_metabolico, sindrome_metabolico, riesgo_aterogenico, 
+    colegio_id) |>
+  tbl_summary(
+    by = colegio_id,
+    percent = "row",
+    statistic = list(
+      all_continuous() ~ "{median} ({p25}, {p75})", 
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical() ~ c(1, 1)),
+    label = list(
+      glucosa ~ "Glucosa en ayunas (mg/dL)",
+      trigliceridos ~ "Triglicéridos (mg/dL)",
+      hdl_colesterol ~ "HDL-c (mg/dL)",
+      colesterol_total ~ "Colesterol total (mg/dL)",
+      PAS ~ "Presión arterial sistólica (mmHg)",
+      PAD ~ "Presión arterial diastólica (mmHg)",
+      pulso ~ "Pulso cardíaco (latidos por minuto)",
+      TyG ~ "Índice triglicéridos-glucosa (TyG)",
+      VAI ~ "Índice de adiposidad visceral (VAI)",
+      metabolic_health ~ "Fenotipo metabólico"
+    ), missing = "no") |>
+  add_p(
+    test = list(
+      all_continuous() ~ "kruskal.test",
+      all_categorical() ~ "chisq.test"
+      # all_continuous() ~ "wilcox.test"
+    ),
+    test.args = all_categorical() ~ list(correct = FALSE),
+    # test.args = all_continuous() ~ list(exact = FALSE)
+    pvalue_fun = ~ style_pvalue(.x, digits = 3)
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  # Simple star for continuous (Kruskal-Wallis)
+  modify_fmt_fun(p.value ~ function(x)
+    ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
+    rows = var_type == "continuous") |>
+  # Double star for categorical (Chi-square and Fisher)
+  modify_fmt_fun(
+    p.value ~ function(x)
+      ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "**")),
+    rows = var_type %in% c("categorical", "dichotomous")
+  ) |>
+  add_stat(fns = list(
+    all_continuous() ~ my_ES_test,
+    all_categorical() ~ my_cramer_v)) |>
+  modify_header(add_stat_1 ~ "**Effect size**")
+```
+
+### Table 1
+
+Con solo 79 observaciones repartidas en 12 celdas (3x4), el promedio es de apenas 6.5 observaciones por celda. Es casi seguro que algunas celdas tendrán frecuencias esperadas menores a 5. El test de Fisher en tablas mayores a 2x2 es computacionalmente muy exigente. Con una tabla de 3x4, R podría tardar un poco o incluso dar un error si las combinaciones son demasiadas. Para una tabla de estas dimensiones y ese N, lo más riguroso es usar el Test de Fisher con simulación de Monte Carlo. Esto te da la precisión de Fisher sin colapsar la memoria de tu computadora.
+
+```{r}
+tabla_1 <- data_clear |>
+  dplyr::select(
+    # Perfil Metabólico
+    metabolic_health, sindrome_metabolico, VAI_sindrome_metabolico,
+    
+    # Hemodinámica
+    PAS, PAD, bp_category, pulso, WHR_cardio,
+    
+    # Bioquímica
+    glucosa, colesterol_total, trigliceridos, hdl_colesterol,
+    
+    # Índices
+    TyG, TyG_IR, TG_HDL_dx, VAI, riesgo_aterogenico,
+    
+    colegio_id) |>
+  tbl_summary(
+    by = colegio_id,
+    percent = "row",
+    statistic = list(
+      all_continuous() ~ "{median} ({p25}, {p75})", 
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = list(
+      all_continuous() ~ c(2, 2),
+      all_categorical() ~ c(1, 1)),
+    label = list(
+      glucosa ~ "Glucosa en ayunas (mg/dL)",
+      trigliceridos ~ "Triglicéridos (mg/dL)",
+      hdl_colesterol ~ "HDL-c (mg/dL)",
+      colesterol_total ~ "Colesterol total (mg/dL)",
+      PAS ~ "Presión arterial sistólica (mmHg)",
+      PAD ~ "Presión arterial diastólica (mmHg)",
+      pulso ~ "Pulso cardíaco (latidos por minuto)",
+      TyG ~ "Índice triglicéridos-glucosa (TyG)",
+      VAI ~ "Índice de adiposidad visceral (VAI)",
+      VAI_sindrome_metabolico ~ "Síndrome metabólico basado en VAI",
+      sindrome_metabolico ~ "Síndrome metabólico",
+      metabolic_health ~ "Fenotipo metabólico",
+      TyG_IR ~ "Insulinorresistencia basada en TyG",
+      TG_HDL_dx	~ "Perfil lipídico",
+      WHR_cardio ~ "Riesgo cardiovascular basado en ICC",
+      riesgo_aterogenico ~  "Dislipidemia aterogénica"
+    ), missing = "no") |>
+  add_p(
+    test = list(
+      all_continuous() ~ "kruskal.test",
+      all_categorical() ~ "fisher.test"
+    ),
+    test.args = list(
+      all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
+    pvalue_fun = ~ style_pvalue(.x, digits = 3)
+  ) |>
+  add_stat(
+    fns = list(
+      all_continuous() ~ my_ES_kruskal,
+      all_categorical() ~ my_cramer_v
+    )
+  ) |>
+  modify_header(add_stat_1 ~ "**Effect Size**") |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_fmt_fun(
+    p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
+    rows = var_type == "continuous"
+  ) |>
+  modify_fmt_fun( 
+    p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "**")),
+    rows = var_type %in% c("categorical", "dichotomous")
+  ) |>
+  modify_header(
+    label = "**Características**", 
+    stat_1 = "**Jorge Basadre - VMT**",
+    stat_2 = "**Santísima Virgen de Chapi - Pachacamac**",
+    stat_3 = "**Jesus y María - La Molina**") |>
+  modify_footnote(
+    starts_with("p.value") ~ 
+    "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**); Prueba exacta de Fisher (†); V de Cramer (†); Magnitud del efecto Eta-cuadrado (‡)"
+  ) |>
+  as_flex_table() |>
+  theme_vanilla() |>
+  align(align = "center", part = "header") |>
+  align(j = 1, align = "left", part = "header") |>
+  fontsize(size = 8, part = "all") |>
+  set_table_properties(layout = "autofit", width = 1)
+```
+
+```{r}
+# Definir las propiedades de la sección (Horizontal)
+sect_properties <- prop_section(
+  page_size = page_size(orient = "portrait"),
+  page_margins = page_mar(bottom = 0.5, top = 0.5, right = 0.5, left = 0.5),
+  type = "continuous"
+)
+
+save_as_docx(
+  tabla_1,
+  align = "center",
+  path = here("outputs", "Table_1.docx"),
+  pr_section = sect_properties)
+```
+
+
+
+Para que tu reporte sea impecable, recuerda que el tamaño del efecto se suele interpretar así:
+
+-   Eta-cuadrado ($\eta^2$): \~0.01 (pequeño), \~0.06 (moderado), \>0.14 (grande). V de Cramer (3x4): Al ser una tabla de este tamaño, un valor \>0.15 suele considerarse un efecto moderado y \>0.25 un efecto fuerte.
+
+-   Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
 
 # Tamaño de muestra
 
@@ -1535,4 +1743,3 @@ N_recruit <- K_total * m_recruit
 m_recruit
 N_recruit
 ```
-
