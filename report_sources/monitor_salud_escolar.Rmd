@@ -193,9 +193,7 @@ div(id = "seccion_salud_metabólica", renderValueBox({
 div(id = "seccion_salud_cardiovascular", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
-    d$bp_category == "Hipertensión Etapa 2" ~ "danger",
-    d$bp_category == "Hipertensión Etapa 1" ~ "danger",
-    d$bp_category == "Elevada" ~ "warning",
+    d$bp_category == "Elevada" ~ "danger",
     d$bp_category == "Normal" ~ "success",
     TRUE ~ "primary"
   )
