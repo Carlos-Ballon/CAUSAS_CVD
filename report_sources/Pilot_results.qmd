@@ -1497,7 +1497,15 @@ tabla_1 <- data_clear |>
       metabolic_health ~ "Fenotipo metabólico (WGOC)",
       TG_HDL_dx	~ "Perfil lipídico",
       riesgo_aterogenico ~ "Dislipidemia aterogénica"
-    )
+    ),
+    missing = "no",
+    type = list(edad_anios = "continuous"),
+    digits = list(
+      all_continuous() ~ c(2, 2), 
+      all_categorical() ~ c(1, 1)),
+    statistic = list(
+      all_categorical() ~ "{n} ({p}%)",
+      all_continuous() ~ "{median} ({p25}, {p75})")
   ) |>
   modify_caption("Tabla 1. Características basales de los escolares evaluados.") |>
   modify_abbreviation(
@@ -1554,7 +1562,9 @@ tabla_2 <- data_clear |>
       zhfa_dx ~ "Altura para la edad (OMS)",
       grasa_ip ~ "Grasa corporal (%)"
       ), 
-    missing = "no") |>
+    missing = "no",
+    type = list(edad_anios = "continuous")
+  ) |>
   add_p(
     test = list(
       all_continuous() ~ "kruskal.test",
@@ -1665,7 +1675,8 @@ tabla_3 <- data_clear |>
       riesgo_aterogenico ~ "Dislipidemia aterogénica",
       indice_cintura_talla ~ "Índice cintura-talla"
     ), 
-    missing = "no") |>
+    missing = "no",
+  ) |>
   add_p(
     test = list(
       all_continuous() ~ "kruskal.test",
