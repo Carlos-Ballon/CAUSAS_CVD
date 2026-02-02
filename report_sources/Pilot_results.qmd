@@ -1523,7 +1523,7 @@ sect_properties <- prop_section(
 save_as_docx(
   tabla_1,
   align = "center",
-  path = here("outputs", "Table_2.docx"),
+  path = here("outputs", "Table_1.docx"),
   pr_section = sect_properties)
 ```
 
@@ -1608,7 +1608,7 @@ tabla_2 <- data_clear |>
 
 ```{r}
 save_as_docx(
-  tabla_1,
+  tabla_2,
   align = "center",
   path = here("outputs", "Table_2.docx"),
   pr_section = sect_properties)
@@ -1721,7 +1721,7 @@ tabla_3 <- data_clear |>
 save_as_docx(
   tabla_3,
   align = "center",
-  path = here("outputs", "Table_2.docx"),
+  path = here("outputs", "Table_3.docx"),
   pr_section = sect_properties)
 ```
 
@@ -1808,7 +1808,7 @@ tabla_4 <- data_clear |>
 save_as_docx(
   tabla_4,
   align = "center",
-  path = here("outputs", "Table_3.docx"),
+  path = here("outputs", "Table_4.docx"),
   pr_section = sect_properties)
 ```
 
