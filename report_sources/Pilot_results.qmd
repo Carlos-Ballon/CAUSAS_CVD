@@ -1514,8 +1514,8 @@ tabla_1 <- data_clear |>
   theme_booktabs() |>
   fontsize(size = 9, part = "all") |>
   padding(
-    padding.top = 0, padding.bottom = 0, padding.left = 2, padding.right = 2, part = "all") |>
-  width(j = 1, width = 1.8) |>
+    padding.top = 0, padding.bottom = 0, padding.right = 2, part = "all") |>
+  width(j = 1, width = 2) |>
   width(j = 2, width = 1.2) |>
   set_table_properties(layout = "fixed")
 ```
