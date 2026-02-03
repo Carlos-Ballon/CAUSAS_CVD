@@ -1,7 +1,11 @@
 ---
 title: "Pilot_results"
+author: "Carlos Ballon-Salcedo"
+date: "`r Sys.Date()`"
 format: docx
 editor: source
+bibliography: grateful-refs.bib
+csl: elsevier-vancouver-no-et-al.csl
 ---
 
 ## Load packages
@@ -28,11 +32,21 @@ pacman::p_load(
   rstatix,
   rcompanion,
   flextable,
-  officer
+  officer,
+  grateful
 )
 
 # Scripts
 source(here::here("scripts", "PAQ-C_item_9.R"))
+```
+
+```{r}
+# Citations
+grateful::cite_packages(
+  output = "file",
+  out.format = "docx",
+  out.dir = ".",
+  citation.style = "elsevier-vancouver-no-et-al")
 ```
 
 # Set gtsummary theme
@@ -227,6 +241,7 @@ data_clear <- data |>
     glucosa_mmol = glucosa / 18.01,
     trigliceridos_mmol  = trigliceridos / 88.57,
     hdl_mmol = hdl_colesterol / 38.67,
+    LDL_friedewald = colesterol_total - hdl_colesterol -(trigliceridos/5),
     imc = peso_kg / (talla_m^2),
     indice_ponderal = peso_kg / (talla_m^3),
     indice_cintura_talla = perimetro_cintura / talla_cm,

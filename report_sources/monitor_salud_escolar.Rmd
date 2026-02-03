@@ -65,9 +65,9 @@ data_shiny <- data_shiny |>
     eczema_actual,
     
     # Biomarcadores
-    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
-    metabolic_health, TG_HDL_dx, bp_category, crit_tg, crit_hdl, crit_glucosa,
-    TG_HDL_ratio, TyG, sindrome_metabolico, VAI_sindrome_metabolico,
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, LDL_friedewald, 
+    PAS, PAD, pulso, metabolic_health, TG_HDL_dx, bp_category, crit_tg, crit_hdl, 
+    crit_glucosa, TG_HDL_ratio, TyG, sindrome_metabolico, VAI_sindrome_metabolico,
     
     # Antropometria
     peso_kg, talla_m, imc, zbfa_dx, zhfa_dx, grasa_ip, VAI, indice_cintura_cadera, 
@@ -171,7 +171,7 @@ output$botones_captura_ui <- renderUI({
 })
 ```
 
-## Fila 1 {data-height=115}
+## Fila 1 {data-height=110}
 
 ### Salud metabólica (WGOC)
 
@@ -230,7 +230,7 @@ div(id = "seccion_sindrome_metabolico", renderValueBox({
 }))
 ```
 
-## Fila 2 {data-height=535}
+## Fila 2 {data-height=540}
 
 ### **Salud metabólica y cardiovascular**
 
