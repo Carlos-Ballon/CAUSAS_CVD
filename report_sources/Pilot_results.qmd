@@ -1689,6 +1689,7 @@ tabla_3 <- data_clear |>
       all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
     pvalue_fun = ~ style_pvalue(.x, digits = 3)
   ) |>
+  # add_q(method = "fdr") |> 
   add_stat(
     fns = list(
       all_continuous() ~ my_ES_kruskal,
@@ -1712,7 +1713,7 @@ tabla_3 <- data_clear |>
     stat_3 = "**Jesus y María - La Molina** (n = {n})",
     p.value = "**Valor p**",
     add_stat_1 = "**Tamaño del efecto**") |>
-  modify_caption("Tabla 3. Comparación de indicadores de salud cardiometabólico entre las instituciones educativas.") |>
+  modify_caption("Tabla 3. Comparación de indicadores de salud cardiometabólica entre las instituciones educativas.") |>
   modify_abbreviation(
     "HDL-c: High density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; ICC: Índice Cintura-Cadera") |>
   modify_footnote(
@@ -1775,6 +1776,7 @@ tabla_4 <- data_clear |>
       all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
     pvalue_fun = ~ style_pvalue(.x, digits = 3)
   ) |>
+  add_q(method = "fdr") |>
   add_stat(
     fns = list(
       all_continuous() ~ my_ES_kruskal,
