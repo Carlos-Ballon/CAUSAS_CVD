@@ -99,7 +99,6 @@ data_clear <- data |>
         "041 - Maria Enco Santiesteban",
         "043 - Azumi Trujillo Quilca",
         "045 - Yamilee Torres Choceña",
-        "046 - Taewa Cachay",
         "047 - Mia Flores Vallejos",
         "048 - Samantha Valeria Vásquez Fernández",
         "050 - Maylen Mariel Garcia Vilcarromero",
@@ -144,6 +143,7 @@ data_clear <- data |>
         "039 - Thiago Huarcaya Huaman",
         "042 - Roy Huaron Aranda",
         "044 - Bryan Setalaya Canales",
+        "046 - Taewa Cachay",
         "049 - Mathias Adriano Castillo Taipe",
         "051 - Jael Cruz Isidro",
         "055 - Matias Córdova Hancco",
@@ -247,7 +247,7 @@ data_clear <- data |>
     WHtR_cat = if_else(indice_cintura_talla >= 0.5, "Riesgo Abdominal", "Normal"),
     
     TyG_IR = if_else(
-      TyG >= 8.19, "Insulinorresistencia", "Sin riesgo"),
+      TyG >= 8.19, "Resistencia a la insulina", "Sin riesgo"),
     
     WHR_cardio = case_when(
       # 1. Primero filtramos si faltan datos
@@ -1005,7 +1005,7 @@ data_clear <- data_clear |>
     ff_label("PM2.5")
   )
 
-# ?saveRDS(data_clear, here("data", "data_shiny.rds"))
+saveRDS(data_clear, here("data", "data_shiny.rds"))
 ```
 
 ```{r}
@@ -1513,6 +1513,9 @@ tabla_1 <- data_clear |>
   as_flex_table() |>
   theme_booktabs() |>
   fontsize(size = 9, part = "all") |>
+  align(j = 1, align = "left", part = "header") |>
+  align(j = 2, align = "center", part = "header") |>
+  align(j = 2, align = "center", part = "body") |>
   padding(
     padding.top = 0, padding.bottom = 0, padding.right = 2, part = "all") |>
   width(j = 1, width = 2) |>
@@ -1574,6 +1577,7 @@ tabla_2 <- data_clear |>
       all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
     pvalue_fun = ~ style_pvalue(.x, digits = 3)
   ) |>
+  # add_q(method = "fdr") |> 
   add_stat(
     fns = list(
       all_continuous() ~ my_ES_kruskal,
@@ -1581,7 +1585,6 @@ tabla_2 <- data_clear |>
     )
   ) |>
   modify_header(add_stat_1 ~ "**Effect Size**") |>
-  bold_labels() |>
   bold_p(t = 0.05) |>
   modify_fmt_fun(
     p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
@@ -1596,9 +1599,9 @@ tabla_2 <- data_clear |>
     stat_1 = "**Jorge Basadre - VMT** (n = {n})",
     stat_2 = "**Santísima Virgen de Chapi - Pachacamac** (n = {n})",
     stat_3 = "**Jesus y María - La Molina** (n = {n})",
-    p.value = "Valor p",
-    add_stat_1 = "Tamaño del efecto") |>
-  modify_caption("Tabla 1. Características sociodemográficas y estado nutricional según institución educativa.") |>
+    p.value = "**Valor p**",
+    add_stat_1 = "**Tamaño del efecto**") |>
+  modify_caption("Tabla 2. Características sociodemográficas y estado nutricional según institución educativa.") |>
   modify_abbreviation(
     "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud") |>
   modify_footnote(
@@ -1667,7 +1670,7 @@ tabla_3 <- data_clear |>
       VAI_sindrome_metabolico ~ "Síndrome metabólico (VAI)",
       sindrome_metabolico ~ "Síndrome metabólico (IDF)",
       metabolic_health ~ "Fenotipo metabólico (WGOC)",
-      TyG_IR ~ "Insulinorresistencia (TyG)",
+      TyG_IR ~ "Resistencia a la insulina (TyG)",
       TG_HDL_dx	~ "Perfil lipídico",
       TG_HDL_ratio ~ "Índice Triglicéridos/HDL-c",
       indice_cintura_cadera ~ "ICC",
@@ -1693,7 +1696,6 @@ tabla_3 <- data_clear |>
     )
   ) |>
   modify_header(add_stat_1 ~ "**Effect Size**") |>
-  bold_labels() |>
   bold_p(t = 0.05) |>
   modify_fmt_fun(
     p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
@@ -1708,9 +1710,9 @@ tabla_3 <- data_clear |>
     stat_1 = "**Jorge Basadre - VMT** (n = {n})",
     stat_2 = "**Santísima Virgen de Chapi - Pachacamac** (n = {n})",
     stat_3 = "**Jesus y María - La Molina** (n = {n})",
-    p.value = "Valor p",
-    add_stat_1 = "Tamaño del efecto") |>
-  modify_caption("Tabla 1. Comparación de indicadores de salud cardiometabólico entre las instituciones educativas.") |>
+    p.value = "**Valor p**",
+    add_stat_1 = "**Tamaño del efecto**") |>
+  modify_caption("Tabla 3. Comparación de indicadores de salud cardiometabólico entre las instituciones educativas.") |>
   modify_abbreviation(
     "HDL-c: High density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; ICC: Índice Cintura-Cadera") |>
   modify_footnote(
@@ -1780,7 +1782,6 @@ tabla_4 <- data_clear |>
     )
   ) |>
   modify_header(add_stat_1 ~ "**Effect Size**") |>
-  bold_labels() |>
   bold_p(t = 0.05) |>
   modify_fmt_fun(
     p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
@@ -1795,9 +1796,9 @@ tabla_4 <- data_clear |>
     stat_1 = "**Jorge Basadre - VMT** (n = {n})",
     stat_2 = "**Santísima Virgen de Chapi - Pachacamac** (n = {n})",
     stat_3 = "**Jesus y María - La Molina** (n = {n})",
-    p.value = "Valor p",
-    add_stat_1 = "Tamaño del efecto") |>
-  modify_caption("Tabla 2. Comparación de indicadores de salud mental y estilos de vida saludable entre las instituciones educativas.") |>
+    p.value = "**Valor p**",
+    add_stat_1 = "**Tamaño del efecto**") |>
+  modify_caption("Tabla 4. Comparación de indicadores de salud mental y estilos de vida saludable entre las instituciones educativas.") |>
   modify_abbreviation(
     "PHQ-9: Patient Health Questionnaire-9; GAD-7: Generalized Anxiety Disorder-7; AFHC: Adolescent Food Habits Checklist; PAQ-A: Physical Activity Questionnaire for Adolescents") |>
   modify_footnote(
