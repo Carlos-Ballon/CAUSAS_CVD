@@ -48,17 +48,18 @@ data_shiny <- readRDS(here::here("data/data_shiny.rds"))
 data_shiny <- data_shiny |>
   dplyr::select(
     # ID
-    record_id, sexo_factor, edad_anios,
+    record_id, sexo_factor, edad_anios, nivel_educativo_madre, nivel_economico,
+    seguro_de_salud_adolescente,
     
     # Salud mental
     PHQ_9,
-    depresion, GAD_7, ansiedad, afhc_score, dinamometria,
-    categoria_afhc, paqc_final_score, paqc_dx,
+    depresion, GAD_7, ansiedad, afhc_score, dinamometria, categoria_afhc, 
+    paqc_final_score, paqc_dx,
     
     # Alergias
-    alergia_pteronyssinus, alergia_farinae, alergia_destructor, 
-    alergia_tropicalis, alergia_perro, alergia_germanica, asma, rinitis_alergica,
-    feno,
+    alergia_pteronyssinus, alergia_farinae, alergia_destructor,
+    alergia_tropicalis, alergia_perro, alergia_germanica, asma, 
+    rinitis_alergica, feno,
     
     # ISAAC
     asma_vida, asma_actual, asma_severa, rinitis_actual, rinoconjuntivitis, 
@@ -66,12 +67,13 @@ data_shiny <- data_shiny |>
     
     # Biomarcadores
     glucosa, trigliceridos, hdl_colesterol, colesterol_total, LDL_friedewald, 
-    PAS, PAD, pulso, metabolic_health, TG_HDL_dx, bp_category, crit_tg, crit_hdl, 
-    crit_glucosa, TG_HDL_ratio, TyG, sindrome_metabolico, VAI_sindrome_metabolico,
+    PAS, PAD, pulso, metabolic_health, TG_LDL_dx, bp_category, crit_tg, crit_hdl,
+    riesgo_aterogenico, dyslipidemia_algorithm, crit_glucosa, TG_HDL_ratio, TyG, 
+    TyG_IR, sindrome_metabolico, VAI_sindrome_metabolico,
     
     # Antropometria
     peso_kg, talla_m, imc, zbfa_dx, zhfa_dx, grasa_ip, VAI, indice_cintura_cadera, 
-    indice_cintura_talla, dinamometria, absi, 
+    indice_cintura_talla, WHR_cardio, dinamometria, absi, 
     
     # Espirometria
     fvc_maximo, fev1_maximo, pef_maximo, fev1_fvc_ratio, clasificacion_espiro
@@ -114,7 +116,7 @@ uiOutput("botones_captura_ui")
 # Lista de botones individuales compactos
 # boton_hd("seccion_salud_metabolica", "Salud Metabólica", "info")
 # boton_hd("seccion_salud_cardiovascular", "Salud cardiovascular", "success")
-# boton_hd("seccion_perfil_lipidico", "Perfil lipidico", "info")
+# boton_hd("seccion_riesgo_cardiometabolico", "Perfil lipidico", "info")
 # boton_hd("seccion_sindrome_metabolico", "Sindrome Metabólico", "success")
 
 # hr() # Separador
@@ -187,7 +189,7 @@ div(id = "seccion_salud_metabólica", renderValueBox({
 }))
 ```
 
-### Salud cardiovascular (AAP)
+### Salud cardiovascular (NHLBI/CDC/AAP)
 
 ```{r}
 div(id = "seccion_salud_cardiovascular", renderValueBox({
@@ -201,18 +203,17 @@ div(id = "seccion_salud_cardiovascular", renderValueBox({
 }))
 ```
 
-### Perfil lipídico
+### Riesgo cardiometabólico <br> (Dislipidemia aterogénica)
 
 ```{r}
-div(id = "seccion_perfil_lipidico", renderValueBox({
+div(id = "seccion_riesgo_cardiometabolico", renderValueBox({
   d <- datos_alumno()
   color_diag <- case_when(
-    d$TG_HDL_dx == "Alto" ~ "danger",
-    d$TG_HDL_dx == "Límite" ~ "warning",
-    d$TG_HDL_dx == "Aceptable" ~ "success",
+    d$riesgo_aterogenico == "Riesgo" ~ "danger",
+    d$riesgo_aterogenico == "Normal" ~ "success",
     TRUE ~ "primary"
   )
-  valueBox(d$TG_HDL_dx, icon = "fa-flask", color = color_diag)
+  valueBox(d$riesgo_aterogenico, icon = "fa-flask", color = color_diag)
 }))
 ```
 
@@ -257,6 +258,7 @@ div(id = "seccion_clinica", tags$style(
       "Triglicéridos (mg/dL)",
       "Colesterol Total (mg/dL)",
       "Colesterol HDL (mg/dL)",
+      "Colesterol LDL (mg/dL)",
       "Presión Sistólica (mmHg)",
       "Presión Diastólica (mmHg)",
       "Porcentaje de grasa corporal",
@@ -279,6 +281,7 @@ div(id = "seccion_clinica", tags$style(
       d$trigliceridos,
       d$colesterol_total,
       d$hdl_colesterol,
+      d$LDL_friedewald,
       d$PAS,
       d$PAD,
       d$grasa_ip,
@@ -297,10 +300,11 @@ div(id = "seccion_clinica", tags$style(
       "-", # Talla (Metros)
       "OMS", # IMC para la edad
       "OMS", # Altura para la edad
-      "< 100 mg/dL", # Glucosa plasmática en ayunas (mg/dL)
-      "< 90 mg/dl", # Triglicéridos (mg/dL)
-      "< 170 mg/dL", # Colesterol Total (mg/dL)
-      "< 110 mg/dL", # Colesterol HDL (mg/dL)
+      "< 100", # Glucosa plasmática en ayunas (mg/dL)
+      "< 90", # Triglicéridos (mg/dL)
+      "< 170", # Colesterol Total (mg/dL)
+      "< 40", # Colesterol HDL (mg/dL)
+      "< 110", # Colesterol LDL (mg/dL)
       "NHLBI/CDC", # Presión Sistólica (mmHg)
       "NHLBI/CDC", # Presión Diastólica (mmHg)
       "< 30%", # Porcentaje de grasa corporal
@@ -484,23 +488,19 @@ div(id = "seccion_espirometria", fluidRow(column(
       class = "abreviaturas-lista",
       tags$li(strong("IMC:"), " Índice de Masa Corporal"),
       tags$li(strong("OMS:"), " Organización Mundial de la Salud"),
-      tags$li(strong("HDL:"), " Lipoproteínas de Alta Densidad"),
+      tags$li(strong("HDL-c:"), " Lipoproteínas de Alta Densidad"),
+      tags$li(strong("LDL-c:"), " Lipoproteína de baja densidad"),
       tags$li(strong("TG:"), " Triglicéridos Totales"),
       tags$li(strong("NHLBI:"), " National Heart, Lung, and Blood Institute"),
       tags$li(strong("CDC:"), " Centers for Disease Control and Prevention"),
       tags$li(strong("PHQ-9:"), " Patient Health Questionnaire-9"),
       tags$li(strong("GAD-7:"), " Generalized Anxiety Disorder-7"),
       tags$li(strong("AFHC:"), " Adolescent Food Habits Checklist"),
-      tags$li(
-        strong("PAQ-A:"),
-        " Physical Activity Questionnaire for Adolescents"
-      ),
-      tags$li(
-        strong("ISAAC:"),
-        " International Study of Asthma and Allergies in Childhood"
-      ),
+      tags$li(strong("PAQ-A:")," Physical Activity Questionnaire for Adolescents"),
+      tags$li(strong("ISAAC:"), " International Study of Asthma and Allergies in Childhood"),
       tags$li(strong("WGOC:"), " Working Group on Obesity in China"),
       tags$li(strong("AAP:"), " American Academy of Pediatrics"),
+      tags$li(strong("NHLBI:"), " National Heart Lung and Blood Institute"),
       tags$li(strong("IDF:"), " International Diabetes Federation"),
       tags$li(strong("mmHg:"), " Milímetros de mercurio")
     ),
@@ -508,11 +508,18 @@ div(id = "seccion_espirometria", fluidRow(column(
     hr(style = "margin: 5px 0;"),
     
     tags$p(
-      style = "font-size: 13px; color: #d9534f; font-style: italic;",
+      style = "font-size: 12px; color: #d9534f; font-style: italic;",
       "Los valores menores a las ",
       strong("referencias"),
       " suelen ser normales; aquellos mayores podrían indicar un desorden metabólico."
-    )
+    ),
+    
+    hr(style = "margin: 5px 0;"),
+    
+    tags$p(
+      style = "font-size: 11px;",
+      "Se recomienda que, ante cualquier indicador de salud cardiometabólica que supere los valores de referencia establecidos, el adolescente sea derivado para una evaluación especializada por pediatría, nutrición, endocrinología o médico general. Como medida inicial, se sugiere la implementar pautas nutricionales que promuevan la salud cardiovascular mediante un aporte de grasas totales de entre el 25-30% de las calorías diarias, con una aporte grasas saturadas entre 8-10% (NHLBI)."
+    ),
   )
 )))
 ```

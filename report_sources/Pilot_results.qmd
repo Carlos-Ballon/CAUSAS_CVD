@@ -171,6 +171,11 @@ data_clear <- data |>
       TRUE ~ NA_real_
     ),
     
+    seguro_de_salud_adolescente = case_match(
+      seguro_de_salud_adolescente, 
+      "EsSalud" ~ "EsSalud",
+      "SIS" ~ "Seguro Integral de Salud (MINSA)"),
+    
     sexo_factor = fct_recode(as.character(sexo), "Masculino" = "1", "Femenino" = "2") |>
       fct_relevel("Masculino", "Femenino"),
     
@@ -241,7 +246,7 @@ data_clear <- data |>
     glucosa_mmol = glucosa / 18.01,
     trigliceridos_mmol  = trigliceridos / 88.57,
     hdl_mmol = hdl_colesterol / 38.67,
-    LDL_friedewald = colesterol_total - hdl_colesterol -(trigliceridos/5),
+    LDL_friedewald = colesterol_total - hdl_colesterol - (trigliceridos/5),
     imc = peso_kg / (talla_m^2),
     indice_ponderal = peso_kg / (talla_m^3),
     indice_cintura_talla = perimetro_cintura / talla_cm,
@@ -303,15 +308,48 @@ data_clear <- data |>
       .names = "{.col}_q4"
     ), 
     
-    TG_HDL_dx = case_when(
-    # Si uno de los dos es "Alto", la categoría es "Alto" (prioridad)
-      hdl_colesterol >= 130 | trigliceridos >= 200 ~ "Alto",
-      
-      (hdl_colesterol >= 110 & hdl_colesterol < 130) |
-        (trigliceridos >= 170 & trigliceridos < 200) ~ "Límite",
-      
-      hdl_colesterol < 110 & trigliceridos < 170 ~ "Aceptable"
+    colesterol_total_dx = case_when(
+      colesterol_total >= 200 ~ "Alto",
+      colesterol_total >= 170 ~ "Límite",
+      colesterol_total < 170 ~ "Aceptable"
+    ),
+    
+    LDL_dx = case_when(
+      LDL_friedewald >= 130 ~ "Alto",
+      LDL_friedewald >= 110 ~ "Límite",
+      LDL_friedewald < 110 ~ "Aceptable"
     ), 
+    
+    HDL_dx = case_when(
+      hdl_colesterol < 40 ~ "Bajo", # Riesgo
+      hdl_colesterol <= 45 ~ "Límite",
+      hdl_colesterol > 45 ~ "Aceptable"
+    ),
+
+    TG_dx = case_when(
+      trigliceridos >= 130 ~ "Alto", 
+      trigliceridos >= 90 ~ "Límite",
+      trigliceridos < 90 ~ "Aceptable"),
+    
+    # Perfil lipídico
+    TG_LDL_dx = case_when(
+      LDL_friedewald >= 130 | colesterol_total >= 200 ~ "Hipercolesterolemia", # Alto
+      LDL_friedewald >= 110 | colesterol_total >= 170 ~ "Hipercolesterolemia", # Límite
+      TRUE ~ "Aceptable"
+    ), 
+    
+    dyslipidemia_algorithm = case_when(
+      LDL_friedewald >= 130 | trigliceridos >= 130 | hdl_colesterol < 40 ~ "Dislipidemia",
+      TRUE ~ "Saludable" # Solo si LDL < 110 AND TG < 90 AND HDL > 45
+    ),
+    
+    perfil_aterogenico_dx = case_when( # Gemini AI
+      trigliceridos >= 130 & hdl_colesterol < 40 ~ "Dislipidemia aterogénica",
+      trigliceridos >= 130 | hdl_colesterol < 40 ~ "Riesgo aislado",
+      (trigliceridos >= 90 & trigliceridos < 130) |
+        (hdl_colesterol >= 40 & hdl_colesterol <= 45) ~ "Límite",
+      TRUE ~ "Aceptable"
+    ),
     
     # Sumatoria de pliegues (TR + SE)
     suma_pliegues = (pliegue_tricipital + pliegue_subescapular) / 2,
@@ -399,21 +437,17 @@ data_clear <- data |>
   tidyr::unpack(z_scores) |>
   mutate(
     zbfa_dx = case_when(
-      zbfa > 2 ~ "Obesidad",
-      zbfa > 1 ~ "Sobrepeso",
+      zbfa > 2 ~ "Exceso de peso", # Obesidad
+      zbfa > 1 ~ "Exceso de peso", # Sobrepeso
       zbfa < -2 ~ "Delgadez",
-      zbfa < -3 ~ "Delgadez Severa",
-      TRUE      ~ "Normal"
+      TRUE ~ "Normal"
     ) |>
       ff_label("IMC para la edad (z-score)"),
     zhfa_dx = case_when(
-      zhfa < -3 ~ "Talla baja severa",
-      zhfa < -2 ~ "Talla baja (Stunting)",
-      zhfa > 3  ~ "Talla muy alta (revisar)", 
-      is.na(zhfa) ~ "Dato faltante",
-      TRUE      ~ "Talla Normal"
+      zhfa < -2 ~ "Talla baja",
+      TRUE ~ "Talla Normal"
     ) |>
-      ff_label("Altura para la edad (z-score)"),
+      ff_label("Talla para la edad (z-score)"),
     
     # Dinamometria
     dinamometria = pmax(dinamo_1, dinamo_2, dinamo_3, dinamo_max, na.rm = TRUE),
@@ -477,7 +511,7 @@ data_clear <- data_clear |>
     p95_dbp_mmHg = bp_p95_reference$dbp,
     
     # SBP and/or DBP ≥ 90th percentile for age, sex and height
-    p95_bp = if_else(sbp_p >= 95 | dbp_p >= 90, 1, 0),
+    p95_bp = if_else(sbp_p >= 95 | dbp_p >= 95, 1, 0), 
     p90_bp = if_else(sbp_p >= 90 | dbp_p >= 90, 1, 0),
     
     # 3. Clasificación
@@ -486,8 +520,8 @@ data_clear <- data_clear |>
       edad_anios >= 13 ~ case_when(
         PAS >= 140 | PAD >= 90 ~ "Elevada", # Hipertensión Etapa 2
         PAS >= 130 | PAD >= 80 ~ "Elevada", # Hipertensión Etapa 1
-        PAS >= 120 & PAD < 80  ~ "Elevada",
-        PAS < 120 & PAD < 80   ~ "Normal",
+        PAS >= 120 & PAD < 80 ~ "Elevada", # Presión Elevada
+        PAS < 120 & PAD < 80 ~ "Normal",
         TRUE ~ NA_character_
         # TRUE ~ "No clasificado"
       ),
@@ -559,25 +593,9 @@ data_clear <- data_clear |>
     ) |>
       fct_relevel("Normal", "Riesgo") |>
       ff_label("Dislipidemia aterogénica"),
-
-    # Variable combinada con Glucosa (IFG)
-    # IFG: Impaired Fasting Glucose (Glucosa entre 100 y 125 mg/dL)
-    perfil_aterogenico_ifg = case_when(
-      TG_HDL_ratio >= 2.2 & glucosa >= 100 ~ "Riesgo Mixto (Lípidos + Glucosa)",
-      TG_HDL_ratio >= 2.2 ~ "Solo Riesgo Lipídico",
-      glucosa >= 100 ~ "Solo Glucosa Alterada (IFG)",
-      TG_HDL_ratio < 2.2 & glucosa < 100 ~ "Sin Riesgo",
-      TRUE ~ NA_character_
-    ) |>
-      fct_relevel(
-        "Sin Riesgo", "Solo Glucosa Alterada (IFG)", 
-        "Solo Riesgo Lipídico", "Riesgo Mixto (Lípidos + Glucosa)") |>
-      ff_label("Dislipidemia aterogénica y glucemia en ayunas alterada"),
     
-    # 1. Preparar variables en las unidades correctas
     cintura_m = perimetro_cintura / 100,
     
-    # 3. Aplicar la fórmula del ABSI
     # ABSI = WC / (BMI^(2/3) * Height^(1/2))
     absi = cintura_m / ((imc^(2 / 3)) * (talla_m^(1 / 2))),
       
@@ -874,13 +892,16 @@ data_clear <- data_clear |>
       fct_relevel("Conviviente", "Soltero(a) o casado(a)", "Otro") |>
       ff_label("Estado civil"),
     
-    nivel_educativo_pariente = case_match(
-      nivel_educativo_pariente, 
-      c("Inicial", "Primaria") ~ "Primaria",
-      c("Técnica", "Universitaria") ~ "Superior",
-      .default = nivel_educativo_pariente) |>
+    nivel_educativo_madre = case_when(
+      nivel_educativo_pariente %in% c("Inicial", "Primaria") & 
+        pariente_del_infante == "Madre" ~ "Primaria",
+      nivel_educativo_pariente == "Secundaria" & 
+        pariente_del_infante == "Madre" ~ "Secundaria",
+      nivel_educativo_pariente %in% c("Técnica", "Universitaria") & 
+        pariente_del_infante == "Madre" ~ "Superior",
+      TRUE ~ NA_character_) |>
       fct_relevel("Primaria", "Secundaria", "Superior") |>
-      ff_label("Nivel educativo del pariente"),
+      ff_label("Nivel educativo de la madre"),
     
     across(starts_with("sit_economica"), ~na_if(., "Prefiere no responder")),
     
@@ -1031,13 +1052,15 @@ comprobacion_espiro <- data_clear |> dplyr::select(record_id, fev1_maximo, z_fev
 comprobacion_espiro
 ```
 
-## Tabla 1. Características socioeconómicas del pariente
+## Produce outputs
+
+### Tabla 1. Características socioeconómicas del pariente
 
 ```{r}
 tbl_1 <- data_clear |>
   dplyr::select(
     PM2_5, pariente_del_infante, edad_pariente, estado_civil_pariente,
-    nivel_educativo_pariente, nivel_economico, seguro_de_salud_adolescente, 
+    nivel_educativo_madre, nivel_economico, seguro_de_salud_adolescente, 
     ano_residencia, orden_del_hijo, colegio_id) |>
   tbl_summary(
     by = colegio_id,
@@ -1067,7 +1090,7 @@ tbl_1 <- data_clear |>
   modify_spanning_header(all_stat_cols(stat_0 = FALSE) ~ "**Colegio**")
 ```
 
-## Tabla 2. Antecedentes de la primera infancia y actuales
+### Tabla 2. Antecedentes de la primera infancia y actuales
 
 ```{r}
 tbl_2 <- data_clear |>
@@ -1099,7 +1122,7 @@ tbl_2 <- data_clear |>
   bold_p(t = 0.05) 
 ```
 
-## Tabla 3. Antecedentes familiares
+### Tabla 3. Antecedentes familiares
 
 ```{r}
 tbl_3 <- data_clear |>
@@ -1128,7 +1151,7 @@ tbl_3 <- data_clear |>
   bold_p(t = 0.05) 
 ```
 
-## Tabla 4. Salud mental, nutrición y actividad física
+### Tabla 4. Salud mental, nutrición y actividad física
 
 ```{r}
 tbl_4 <- data_clear |>
@@ -1162,7 +1185,7 @@ tbl_4 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 5. Exposoma
+### Tabla 5. Exposoma
 
 ```{r}
 # tbl_5 <- data_clear |>
@@ -1179,7 +1202,7 @@ tbl_4 <- data_clear |>
 #   bold_p(t = 0.05)
 ```
 
-## Tabla 6. Alergias, asma y rinitis
+### Tabla 6. Alergias, asma y rinitis
 
 ```{r}
 tbl_6 <- data_clear |>
@@ -1210,7 +1233,7 @@ tbl_6 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 7. International Study of Asthma and Allergies in Childhood (ISAAC)
+### Tabla 7. International Study of Asthma and Allergies in Childhood (ISAAC)
 
 ```{r}
 tbl_7 <- data_clear |>
@@ -1234,29 +1257,37 @@ tbl_7 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 8. Biomarcadores
+### Tabla 8. Biomarcadores
 
 ```{r}
 tbl_8 <- data_clear |>
   dplyr::select(
-    glucosa, trigliceridos, hdl_colesterol, colesterol_total, PAS, PAD, pulso,
-    TyG, VAI, metabolic_health, bp_category, TyG_IR, TG_HDL_dx, WHR_cardio,
-    VAI_sindrome_metabolico, sindrome_metabolico, riesgo_aterogenico, 
-    colegio_id) |>
+    glucosa, trigliceridos, hdl_colesterol, LDL_friedewald, colesterol_total,
+    TG_LDL_dx, TG_HDL_ratio, riesgo_aterogenico, dyslipidemia_algorithm, 
+    PAS, PAD, pulso, TyG, VAI, VAI_sindrome_metabolico, sindrome_metabolico, 
+    metabolic_health, bp_category, TyG_IR, colegio_id) |>
   tbl_summary(
     by = colegio_id,
     digits = list(all_continuous() ~ c(2, 2)),
     label = list(
-      glucosa ~ "Glucosa en ayunas (mg/dL)",
+      glucosa ~ "Glucosa plasmática en ayunas (mg/dL)",
       trigliceridos ~ "Triglicéridos (mg/dL)",
       hdl_colesterol ~ "HDL-c (mg/dL)",
+      LDL_friedewald ~ "LDL-c (mg/dL)",
       colesterol_total ~ "Colesterol total (mg/dL)",
+      TG_LDL_dx ~ "Perfil lipídico",
+      TG_HDL_ratio ~ "Índice Triglicéridos/HDL-c",
+      riesgo_aterogenico ~ "Dislipidemia aterogénica",
+      dyslipidemia_algorithm ~ "Dislipidemia (Algoritmo NHLBI)",
       PAS ~ "Presión arterial sistólica (mmHg)",
       PAD ~ "Presión arterial diastólica (mmHg)",
       pulso ~ "Pulso cardíaco (latidos por minuto)",
       TyG ~ "Índice triglicéridos-glucosa (TyG)",
+      TyG_IR ~ "Resistencia a la insulina (TyG)",
       VAI ~ "Índice de adiposidad visceral (VAI)",
-      metabolic_health ~ "Fenotipo metabólico"
+      VAI_sindrome_metabolico ~ "Síndrome metabólico (VAI)",
+      sindrome_metabolico ~ "Síndrome metabólico (IDF)",
+      metabolic_health ~ "Fenotipo metabólico (WGOC)"
       ),
     missing = "no") |>
   add_overall() |>
@@ -1273,7 +1304,7 @@ tbl_1 <- data_clear |>
 lapply(tbl_1 , function(x) addmargins(table(x, useNA = "ifany")))
 ```
 
-## Tabla 9. Antropometría
+### Tabla 9. Antropometría
 
 ```{r}
 tbl_9 <- data_clear |>
@@ -1303,7 +1334,7 @@ tbl_9 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 10. Índices
+### Tabla 10. Índices
 
 ```{r}
 tbl_10 <- data_clear |>
@@ -1318,11 +1349,12 @@ tbl_10 <- data_clear |>
       perimetro_cintura	~ "Perímetro de cintura (cm)",
       perimetro_cadera	~ "Perímetro de cadera (cm)",
       indice_cintura_cadera	~ "Índice cintura-cadera",
-      indice_cintura_talla ~ "Índice cintura-altura (ICT)",
+      indice_cintura_talla ~ "Índice cintura-talla (ICT)",
       TyG_WC ~ "TyG-Circunferencia de la cintura",
       TyG_BMI ~ "TyG-IMC",
       TyG_WHtR ~ "TyG-ICT",
-      TG_HDL_ratio ~ "TyG-HDL"
+      TG_HDL_ratio ~ "TyG-HDL",
+      WHR_cardio ~ "Riesgo cardiovascular (ICC)"
       ),
     missing = "no") |>
   add_overall() |>
@@ -1331,7 +1363,7 @@ tbl_10 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 11. Grasa corporal
+### Tabla 11. Grasa corporal
 
 ```{r}
 tbl_11 <- data_clear |>
@@ -1355,7 +1387,7 @@ tbl_11 <- data_clear |>
   bold_p(t = 0.05)
 ```
 
-## Tabla 12. Espirometría
+### Tabla 12. Espirometría
 
 ```{r}
 tbl_12 <- data_clear |>
@@ -1497,7 +1529,7 @@ my_cramer_v <- function(data, variable, by, ...) {
 tabla_1 <- data_clear |>
   dplyr::select(
     sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, grasa_ip, bp_category, 
-    TG_HDL_dx, riesgo_aterogenico, sindrome_metabolico, metabolic_health
+    riesgo_aterogenico, sindrome_metabolico, metabolic_health
   ) |>
   tbl_summary(
     label = list(
@@ -1507,11 +1539,10 @@ tabla_1 <- data_clear |>
       talla_m	~ "Talla (metros)",
       zbfa_dx ~ "IMC para la edad (OMS)",
       grasa_ip ~ "Grasa corporal (%)",
-      bp_category ~ "Riesgo cardiovascular",
+      bp_category ~ "Riesgo cardiovascular (NHLBI/CDC/AAP)",
       sindrome_metabolico ~ "Síndrome metabólico (IDF)",
       metabolic_health ~ "Fenotipo metabólico (WGOC)",
-      TG_HDL_dx	~ "Perfil lipídico",
-      riesgo_aterogenico ~ "Dislipidemia aterogénica"
+      riesgo_aterogenico ~ "Riesgo cardiometabólico (Dislipidemia aterogénica)"
     ),
     missing = "no",
     type = list(edad_anios = "continuous"),
@@ -1524,7 +1555,7 @@ tabla_1 <- data_clear |>
   ) |>
   modify_caption("Tabla 1. Características basales de los escolares evaluados.") |>
   modify_abbreviation(
-    "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China") |>
+    "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; NHLBI: National Heart Lung and Blood Institute; CDC: Centers for Disease Control and Prevention; AAP: American Academy of Pediatrics") |>
   as_flex_table() |>
   theme_booktabs() |>
   fontsize(size = 9, part = "all") |>
@@ -1560,7 +1591,8 @@ Con solo 79 observaciones repartidas en 12 celdas (3x4), el promedio es de apena
 ```{r}
 tabla_2 <- data_clear |>
   dplyr::select(
-    sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, zhfa_dx, grasa_ip,
+    nivel_economico, nivel_educativo_madre, seguro_de_salud_adolescente, 
+    sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, grasa_ip, 
     colegio_id) |>
   tbl_summary(
     by = colegio_id,
@@ -1577,7 +1609,7 @@ tabla_2 <- data_clear |>
       peso_kg ~ "Peso (Kg)",
       talla_m	~ "Talla (metros)",
       zbfa_dx ~ "IMC para la edad (OMS)",
-      zhfa_dx ~ "Altura para la edad (OMS)",
+      seguro_de_salud_adolescente ~ "Seguro de salud del adolescente",
       grasa_ip ~ "Grasa corporal (%)"
       ), 
     missing = "no",
@@ -1618,7 +1650,7 @@ tabla_2 <- data_clear |>
     add_stat_1 = "**Tamaño del efecto**") |>
   modify_caption("Tabla 2. Características sociodemográficas y estado nutricional según institución educativa.") |>
   modify_abbreviation(
-    "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud") |>
+    "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud; MINSA: Ministerio de Salud del Perú") |>
   modify_footnote(
     starts_with("p.value") ~ 
     "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**)",
@@ -1655,7 +1687,8 @@ tabla_3 <- data_clear |>
     riesgo_aterogenico,
     
     # Bioquímica
-    glucosa, colesterol_total, trigliceridos, hdl_colesterol, TG_HDL_dx,
+    glucosa, colesterol_total, trigliceridos, hdl_colesterol, LDL_friedewald, 
+    TG_LDL_dx, dyslipidemia_algorithm,
     
     # Índices
     TyG, TyG_IR, indice_cintura_talla,
@@ -1676,22 +1709,26 @@ tabla_3 <- data_clear |>
       trigliceridos ~ "Triglicéridos (mg/dL)",
       hdl_colesterol ~ "HDL-c (mg/dL)",
       colesterol_total ~ "Colesterol total (mg/dL)",
+      hdl_colesterol ~ "HDL-c (mg/dL)",
+      LDL_friedewald ~ "LDL-c (mg/dL)†††",
+      TG_LDL_dx	~ "Perfil lipídico (NHLBI)†††",
       PAS ~ "Presión arterial sistólica (mmHg)",
       PAD ~ "Presión arterial diastólica (mmHg)",
       pulso ~ "Pulso cardíaco (latidos por minuto)",
-      bp_category ~ "Riesgo cardiovascular",
+      bp_category ~ "Riesgo cardiovascular (NHLBI/CDC/AAP)",
       TyG ~ "TyG",
       VAI ~ " VAI",
       VAI_sindrome_metabolico ~ "Síndrome metabólico (VAI)",
       sindrome_metabolico ~ "Síndrome metabólico (IDF)",
       metabolic_health ~ "Fenotipo metabólico (WGOC)",
       TyG_IR ~ "Resistencia a la insulina (TyG)",
-      TG_HDL_dx	~ "Perfil lipídico",
+      TG_LDL_dx	~ "Perfil lipídico (NHLBI)†††",
       TG_HDL_ratio ~ "Índice Triglicéridos/HDL-c",
+      riesgo_aterogenico ~ "Riesgo cardiometabólico (Dislipidemia aterogénica)",
       indice_cintura_cadera ~ "ICC",
       WHR_cardio ~ "Riesgo cardiovascular (ICC)",
-      riesgo_aterogenico ~ "Dislipidemia aterogénica",
-      indice_cintura_talla ~ "Índice cintura-talla"
+      indice_cintura_talla ~ "ICT",
+      dyslipidemia_algorithm ~ "Dislipidemia (Algoritmo NHLBI)†††"
     ), 
     missing = "no",
   ) |>
@@ -1704,7 +1741,7 @@ tabla_3 <- data_clear |>
       all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
     pvalue_fun = ~ style_pvalue(.x, digits = 3)
   ) |>
-  # add_q(method = "fdr") |> 
+  add_q(method = "fdr") |> 
   add_stat(
     fns = list(
       all_continuous() ~ my_ES_kruskal,
@@ -1730,11 +1767,11 @@ tabla_3 <- data_clear |>
     add_stat_1 = "**Tamaño del efecto**") |>
   modify_caption("Tabla 3. Comparación de indicadores de salud cardiometabólica entre las instituciones educativas.") |>
   modify_abbreviation(
-    "HDL-c: High density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; ICC: Índice Cintura-Cadera") |>
+    "HDL-c: High density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; ICC: Índice Cintura-Cadera; ICT: Índice Cintura-Talla; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; NHLBI: National Heart Lung and Blood Institute; CDC: Centers for Disease Control and Prevention; AAP: American Academy of Pediatrics") |>
   modify_footnote(
     starts_with("p.value") ~ 
     "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**)",
-    add_stat_1 ~ "V de Cramer (†); Magnitud del efecto Eta-cuadrado (‡)"
+    add_stat_1 ~ "V de Cramer (†); Magnitud del efecto Eta-cuadrado (‡); el colesterol LDL fue estimado mediante la fórmula de Friedewald"
   ) |>
   as_flex_table() |>
   theme_booktabs() |>
@@ -1815,7 +1852,7 @@ tabla_4 <- data_clear |>
     stat_3 = "**Jesus y María - La Molina** (n = {n})",
     p.value = "**Valor p**",
     add_stat_1 = "**Tamaño del efecto**") |>
-  modify_caption("Tabla 4. Comparación de indicadores de salud mental y estilos de vida saludable entre las instituciones educativas.") |>
+  modify_caption("Tabla 4. Comparación de indicadores de salud mental y estilos de vida saludables entre las instituciones educativas.") |>
   modify_abbreviation(
     "PHQ-9: Patient Health Questionnaire-9; GAD-7: Generalized Anxiety Disorder-7; AFHC: Adolescent Food Habits Checklist; PAQ-A: Physical Activity Questionnaire for Adolescents") |>
   modify_footnote(
@@ -1966,3 +2003,58 @@ N_recruit <- K_total * m_recruit
 m_recruit
 N_recruit
 ```
+
+```{r}
+#| eval: false
+library(pwr)
+
+# --- 1. PARÁMETROS DEL ESTUDIO ---
+delta <- 2.21         # Diferencia esperada en PAS (mmHg)
+sd_outcome <- 8.73    # Desviación estándar estimada
+efecto_d <- delta / sd_outcome  # d de Cohen calculado (~0.253)
+
+m <- 32               # Meta de niños por colegio (seguimiento completo)
+icc <- 0.02           # Correlación intraclase
+alfa <- 0.05          # Nivel de significancia
+poder <- 0.80         # Potencia (80%)
+
+# --- 2. CÁLCULO INDIVIDUAL (Base) ---
+# Calculamos el n por grupo asumiendo independencia
+calc_n <- pwr.t.test(d = efecto_d, 
+                     sig.level = alfa, 
+                     power = poder, 
+                     type = "two.sample", 
+                     alternative = "two.sided")
+
+# DEFINICIÓN DE LA VARIABLE QUE FALTABA
+n_indiv_por_grupo <- ceiling(calc_n$n) 
+
+# Total de niños sin considerar colegios (Grupo A + Grupo B)
+n_indiv_total <- n_indiv_por_grupo * 2
+
+# --- 3. AJUSTE POR CONGLOMERADOS (Cluster) ---
+# Factor de inflación de la varianza (Design Effect)
+de <- 1 + icc * (m - 1)
+
+# Número total de niños ajustado por el efecto de diseño
+n_ajustado <- ceiling(n_indiv_total * de)
+
+# --- 4. CÁLCULO DE COLEGIOS Y RECLUTAMIENTO ---
+# Número de colegios (k) necesarios
+k_total <- ceiling(n_ajustado / m)
+
+# Ajuste por pérdidas del 10% para saber cuántos reclutar al inicio
+m_reclutamiento <- ceiling(m / 0.90) 
+n_final_reclutamiento <- k_total * m_reclutamiento
+
+# --- 5. RESULTADOS ---
+cat("--- RESULTADOS DEL CÁLCULO DE MUESTRA ---\n")
+cat("Tamaño del Efecto (d):", round(efecto_d, 3), "\n")
+cat("N por grupo (sin ajuste):", n_indiv_por_grupo, "\n")
+cat("Efecto de Diseño (DE):", round(de, 2), "\n")
+cat("Niños necesarios (total ajustado - seguimiento):", n_ajustado, "\n")
+cat("Colegios necesarios (k):", k_total, "\n")
+cat("Niños a reclutar por colegio (con pérdidas):", m_reclutamiento, "\n")
+cat("TOTAL NIÑOS A RECLUTAR:", n_final_reclutamiento, "\n")
+```
+
