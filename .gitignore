@@ -3,3 +3,4 @@
 .RData
 .Ruserdata
 scripts/credentials.R
+data/*.rds
