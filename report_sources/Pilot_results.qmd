@@ -33,7 +33,8 @@ pacman::p_load(
   rcompanion,
   flextable,
   officer,
-  grateful
+  grateful,
+  logbin
 )
 
 # Scripts
@@ -375,11 +376,7 @@ data_clear <- data |>
     masa_grasa_kg_slaughet = (grasa_slaughet / 100) * peso_kg,
     
     # Variable de sexo codificada para Deurenberg (Hombres=1, Mujeres=0)
-    sexo_deurenberg = case_when(
-      sexo == 1 ~ 1,
-      sexo == 2 ~ 0,
-      TRUE ~ NA_real_
-    ),
+    sexo_deurenberg = if_else(sexo == 1, 1, 0),
     
     # Estimación del %GC - Ecuación de Deuremberg et al.(1991)
     grasa_deurenberg = (1.51 * imc) - (0.70 * edad_anios) - (3.6 * sexo_deurenberg) + 1.4,
@@ -410,6 +407,10 @@ data_clear <- data |>
     
     # Masa Grasa en Kg
     masa_grasa_kg_ip = (grasa_ip / 100) * peso_kg,
+    
+    # RFM
+    sexo_rfmp = if_else(sexo == 1, 0, 1),
+    RFMp = 74 - (22 * talla_cm/perimetro_cintura) + (5 * sexo_rfmp),
     
     # WC ≥ 95th percentile for age and sex
     sexo_rec = if_else(sexo == 1, "male", "female"),
@@ -1036,9 +1037,17 @@ data_clear <- data_clear |>
       colegio_id == "Colegio Jorge Basadre - VMT" ~ "28.96 (2.35)",
       colegio_id == "Colegio Santísima Virgen de Chapi - Pachacamac" ~ "32.94 (2.57)",
       colegio_id == "Colegio 0028 Jesus y María - La Molina" ~ "26.83 (2.62)",
-      TRUE ~ NA_character_ # Importante: usar character porque ahora es texto
+      TRUE ~ NA_character_
     ) |>
-    ff_label("PM2.5")
+    ff_label("PM2.5"),
+    
+    nivel = case_match(
+      colegio_id,
+      "Colegio Jorge Basadre - VMT" ~ "Nivel 2",
+      "Colegio 0028 Jesus y María - La Molina" ~ "Nivel 1",
+      "Colegio Santísima Virgen de Chapi - Pachacamac" ~ "Nivel 3"
+    ) |>
+      fct_relevel("Nivel 1", "Nivel 2", "Nivel 3")
   )
 
 saveRDS(data_clear, here("data", "data_shiny.rds"))
@@ -1174,7 +1183,7 @@ tbl_4 <- data_clear |>
       ansiedad ~ "Trastorno de Ansiedad Generalizada",
       afhc_score ~ "Puntaje del AFHS",
       categoria_afhc ~ "Hábitos alimentarios para adolescentes",
-      paqc_final_score ~ "Puntaje del PAQ-A",
+      paqc_final_score ~ "Puntaje del PAQ-C",
       paqc_dx ~ "Actividad física para adolescentes",
       dinamometria ~ "Dinapenia"
     ),
@@ -1228,9 +1237,32 @@ tbl_6 <- data_clear |>
     ),
     missing = "no"
   ) |>
-  add_overall() |>
-  add_p(pvalue_fun = ~style_pvalue(.x, digits = 3)) |>
-  bold_p(t = 0.05)
+  add_p(
+    test = list(
+      all_continuous() ~ "kruskal.test",
+      all_categorical() ~ "fisher.test"
+    ),
+    test.args = list(
+      all_categorical() ~ list(simulate.p.value = TRUE, B = 2000)),
+    pvalue_fun = ~ style_pvalue(.x, digits = 3)
+  ) |>
+  add_q(method = "fdr") |> 
+  add_stat(
+    fns = list(
+      all_continuous() ~ my_ES_kruskal,
+      all_categorical() ~ my_cramer_v
+    )
+  ) |>
+  modify_header(add_stat_1 ~ "**Effect Size**") |>
+  bold_p(t = 0.05) |>
+  modify_fmt_fun(
+    p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "*")),
+    rows = var_type == "continuous"
+  ) |>
+  modify_fmt_fun( 
+    p.value ~ function(x) ifelse(is.na(x), "", paste0(style_pvalue(x, digits = 3), "**")),
+    rows = var_type %in% c("categorical", "dichotomous")
+  )
 ```
 
 ### Tabla 7. International Study of Asthma and Allergies in Childhood (ISAAC)
@@ -1368,7 +1400,8 @@ tbl_10 <- data_clear |>
 ```{r}
 tbl_11 <- data_clear |>
   dplyr::select(
-    grasa_boileau, grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, colegio_id) |>
+    grasa_boileau, grasa_slaughet, grasa_deurenberg, grasa_ict, grasa_ip, RFMp, 
+    colegio_id) |>
   tbl_summary(
     by = colegio_id,
     digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(1, 1)),
@@ -1378,7 +1411,8 @@ tbl_11 <- data_clear |>
       grasa_slaughet ~ "%GC Slaughetr et al. (1988)",
       grasa_deurenberg ~ "%GC Deuremberg et al.(1991)",
       grasa_ict ~ "%GC ICT",
-      grasa_ip ~ "%GC índice ponderal"
+      grasa_ip ~ "%GC índice ponderal",
+      RFMp = "RFMp (%)"
       ),
     missing = "no") |>
   add_overall() |>
@@ -1490,6 +1524,11 @@ tables
 
 ## Tablas manuscrito
 
+El tamaño del efecto se suele interpretar así:
+
+Eta-cuadrado ($\eta^2$): ~0.01 (pequeño), ~0.06 (moderado), >0.14 (grande). 
+V de Cramer (3x4): Al ser una tabla de este tamaño, un valor >0.15 suele considerarse un efecto moderado y >0.25 un efecto fuerte.
+
 ```{r}
 # Wilcoxon Effect Size
 # my_ES_test <- function(data, variable, by, ...) {
@@ -1529,7 +1568,7 @@ my_cramer_v <- function(data, variable, by, ...) {
 tabla_1 <- data_clear |>
   dplyr::select(
     sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, grasa_ip, bp_category, 
-    riesgo_aterogenico, sindrome_metabolico, metabolic_health
+    riesgo_aterogenico, sindrome_metabolico, metabolic_health, nivel_economico, nivel_educativo_madre, seguro_de_salud_adolescente, RFMp, zbfa
   ) |>
   tbl_summary(
     label = list(
@@ -1592,7 +1631,7 @@ Con solo 79 observaciones repartidas en 12 celdas (3x4), el promedio es de apena
 tabla_2 <- data_clear |>
   dplyr::select(
     nivel_economico, nivel_educativo_madre, seguro_de_salud_adolescente, 
-    sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, grasa_ip, 
+    sexo_factor, edad_anios, peso_kg, talla_m, zbfa_dx, zbfa, grasa_ip, RFMp,
     colegio_id) |>
   tbl_summary(
     by = colegio_id,
@@ -1610,7 +1649,8 @@ tabla_2 <- data_clear |>
       talla_m	~ "Talla (metros)",
       zbfa_dx ~ "IMC para la edad (OMS)",
       seguro_de_salud_adolescente ~ "Seguro de salud del adolescente",
-      grasa_ip ~ "Grasa corporal (%)"
+      grasa_ip ~ "Grasa corporal (%)",
+      RFMp ~ "RFMp (%)"
       ), 
     missing = "no",
     type = list(edad_anios = "continuous")
@@ -1650,7 +1690,7 @@ tabla_2 <- data_clear |>
     add_stat_1 = "**Tamaño del efecto**") |>
   modify_caption("Tabla 2. Características sociodemográficas y estado nutricional según institución educativa.") |>
   modify_abbreviation(
-    "IMC: Índice de Masa Corporal; OMS: Organización Mundial de la Salud; MINSA: Ministerio de Salud del Perú") |>
+    "IMC: Índice de Masa Corporal; RFMp: Relative Fat Mass pediatric; OMS: Organización Mundial de la Salud; MINSA: Ministerio de Salud del Perú") |>
   modify_footnote(
     starts_with("p.value") ~ 
     "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**)",
@@ -1767,7 +1807,7 @@ tabla_3 <- data_clear |>
     add_stat_1 = "**Tamaño del efecto**") |>
   modify_caption("Tabla 3. Comparación de indicadores de salud cardiometabólica entre las instituciones educativas.") |>
   modify_abbreviation(
-    "HDL-c: High density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; ICC: Índice Cintura-Cadera; ICT: Índice Cintura-Talla; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; NHLBI: National Heart Lung and Blood Institute; CDC: Centers for Disease Control and Prevention; AAP: American Academy of Pediatrics") |>
+    "HDL-c: High density lipoprotein; LDL-c: Low density lipoprotein; TyG: Índice triglicéridos-glucosa; VAI: Índice de adiposidad visceral; ICC: Índice Cintura-Cadera; ICT: Índice Cintura-Talla; IDF: International Diabetes Federation; WGOC: Working Group on Obesity in China; NHLBI: National Heart Lung and Blood Institute; CDC: Centers for Disease Control and Prevention; AAP: American Academy of Pediatrics") |>
   modify_footnote(
     starts_with("p.value") ~ 
     "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**)",
@@ -1813,7 +1853,7 @@ tabla_4 <- data_clear |>
       ansiedad ~ "Trastorno de ansiedad generalizada",
       afhc_score ~ "Puntaje del AFHS",
       categoria_afhc ~ "Hábitos alimentarios para adolescentes",
-      paqc_final_score ~ "Puntaje del PAQ-A",
+      paqc_final_score ~ "Puntaje del PAQ-C",
       paqc_dx ~ "Actividad física del adolescentes",
       dinamometria ~ "Dinapenia"
     ),
@@ -1854,7 +1894,7 @@ tabla_4 <- data_clear |>
     add_stat_1 = "**Tamaño del efecto**") |>
   modify_caption("Tabla 4. Comparación de indicadores de salud mental y estilos de vida saludables entre las instituciones educativas.") |>
   modify_abbreviation(
-    "PHQ-9: Patient Health Questionnaire-9; GAD-7: Generalized Anxiety Disorder-7; AFHC: Adolescent Food Habits Checklist; PAQ-A: Physical Activity Questionnaire for Adolescents") |>
+    "PHQ-9: Patient Health Questionnaire-9; GAD-7: Generalized Anxiety Disorder-7; AFHC: Adolescent Food Habits Checklist; PAQ-C: Physical Activity Questionnaire for Older Children") |>
   modify_footnote(
     starts_with("p.value") ~ 
     "Prueba de Kruskal-Wallis (*); Prueba exacta de Fisher con simulación de Montecarlo (**)",
@@ -1878,14 +1918,95 @@ save_as_docx(
   pr_section = sect_properties)
 ```
 
-Para que tu reporte sea impecable, recuerda que el tamaño del efecto se suele interpretar así:
+### Table 5
 
--   Eta-cuadrado ($\eta^2$): \~0.01 (pequeño), \~0.06 (moderado), \>0.14 (grande). V de Cramer (3x4): Al ser una tabla de este tamaño, un valor \>0.15 suele considerarse un efecto moderado y \>0.25 un efecto fuerte.
+```{r}
+data_causas <- data_clear |>
+  dplyr::select(
+    edad_anios, sexo_factor, nivel_economico, nivel_educativo_madre, 
+    seguro_de_salud_adolescente, PAS, PAD, glucosa, colesterol_total, 
+    trigliceridos, hdl_colesterol, LDL_friedewald, VAI, TyG, 
+    alergia_pteronyssinus, alergia_destructor, alergia_germanica, asma, 
+    peso_kg, talla_m, zbfa, zbfa_dx, grasa_ip, RFMp, indice_cintura_cadera,
+    indice_cintura_talla, PHQ_9, GAD_7, afhc_score, paqc_final_score, nivel
+  )
 
--   Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
+# Variables para modelos lineales (gaussian)
+vars_linear <- c(
+  "PAS", "PAD", "glucosa", "colesterol_total", "trigliceridos", 
+  "hdl_colesterol", "LDL_friedewald", "VAI", "TyG", "peso_kg", 
+  "talla_m", "zbfa", "grasa_ip", "RFMp", "indice_cintura_cadera", 
+  "indice_cintura_talla", "PHQ_9", "GAD_7", "afhc_score", "paqc_final_score"
+)
 
+# Variables para modelos log-binomiales (requieren recodificación a 0/1)
+vars_logbin <- c(
+  "alergia_pteronyssinus", "alergia_destructor", 
+  "alergia_germanica", "asma", "zbfa_dx"
+)
+
+# Labels
+nombres_bonitos <- c(
+  "PAS", "PAD", "glucosa", "colesterol_total", "trigliceridos", 
+  "hdl_colesterol", "LDL_friedewald", "VAI", "TyG", "peso_kg", 
+  "talla_m", "zbfa", "grasa_ip", "RFMp", "indice_cintura_cadera", 
+  "indice_cintura_talla", "PHQ_9", "GAD_7", "afhc_score", "paqc_final_score",
+  "alergia_pteronyssinus", "alergia_destructor", 
+  "alergia_germanica", "asma", "zbfa_dx"
+)
+
+run_my_models <- function(var_name, data) {
+  
+  # Determinar la etiqueta a mostrar
+  var_label <- ifelse(
+    var_name %in% names(nombres_bonitos), 
+    nombres_bonitos[var_name], 
+    var_name)
+  
+  if (var_name %in% vars_linear) {
+    # --- Modelo Lineal ---
+    formula_ml <- as.formula(paste(var_name, "~ nivel"))
+    model <- glm(formula_ml, data = data, family = gaussian(link = "identity")) |> 
+      tbl_regression(
+        exponentiate = FALSE,
+        label = list(nivel ~ var_label))
+    
+  } else {
+    # --- Modelo Log-Binomial ---
+    # Recodificamos dinámicamente según tus criterios
+    data_mod <- data |> 
+      mutate(!!sym(var_name) := case_when(
+        .data[[var_name]] %in% c("Sí", "Exceso de peso") ~ 1L,
+        is.na(.data[[var_name]]) ~ NA_integer_,
+        TRUE ~ 0L
+      ))
+    
+    formula_lb <- as.formula(paste(var_name, "~ nivel"))
+    model <- logbin(formula_lb, data = data_mod, method = "em") |> 
+      tbl_regression(
+        exponentiate = TRUE,
+        label = list(nivel ~ var_label))
+  }
+  
+  return(model)
+}
+
+# Unimos todas las variables en una sola lista para iterar
+all_vars <- c(vars_linear, vars_logbin)
+
+# Generamos la lista de tablas y las apilamos
+tabla_final <- all_vars |> 
+  map(~ run_my_models(.x, data_causas)) |> 
+  tbl_stack() |> 
+  bold_labels()
+
+# Visualizar
+tabla_final
+```
 
 # Tamaño de muestra
+
+Calculo del tamaño de muestra basada en conglomerados, para que la unidad de analisis sean colegios y no niños
 
 ```{r}
 #| eval: false
@@ -1974,6 +2095,7 @@ cat("Total de niños a reclutar:", k_total * m, "\n")
 
 ```{r}
 #| eval: false
+# Ricardo
 # ---- Tamaño de muestra CRT continuo con ajuste por baseline (sin paquetes) ----
 alpha <- 0.05
 power <- 0.80
@@ -2006,8 +2128,7 @@ N_recruit
 
 ```{r}
 #| eval: false
-library(pwr)
-
+# library(pwr)
 # --- 1. PARÁMETROS DEL ESTUDIO ---
 delta <- 2.21         # Diferencia esperada en PAS (mmHg)
 sd_outcome <- 8.73    # Desviación estándar estimada
