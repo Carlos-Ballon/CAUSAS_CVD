@@ -1,0 +1,1242 @@
+---
+title: "suizo"
+format: docx
+editor: source
+---
+
+## Load packages
+
+```{r}
+# Packages
+pacman::p_load(
+  rio,
+  here, 
+  janitor,
+  tidyverse,
+  REDCapR,
+  REDCapDM,
+  rfextras,
+  gtsummary,
+  Hmisc,
+  anthroplus,
+  rspiro,
+  childsds,
+  pedbp,
+  finalfit,
+  pwr,
+  corrplot,
+  rstatix,
+  rcompanion,
+  flextable,
+  officer,
+  grateful,
+  logbin,
+  labelled,
+  haven,
+  brglm2,
+  naniar
+)
+
+# Scripts
+source(here::here("scripts", "PAQ-C_item_9.R"))
+```
+
+## Importar, calcular indicadores y factorizar variables categóricas
+
+```{r}
+# 1. Leer y seleccionar únicamente las variables de interés
+data <- read.csv(here("data", "ContaminacinAmbienta_DATA_2026-11-03_1355.csv")) |>
+  dplyr::select(
+    # Módulos 1 a 8: Salud y ambiente
+    nombre_escolar, id, colegio, colegio_id, grado_escolar,
+    edad_escolar, pariente_del_infante_2_v2, sexo_escolar, distrito, direccion_conoce,
+    direccion, tiempo_casa, cuantos_casa, cuarto_compartido, cuarto_cuantas,
+    seguro_salud, asma_medico, inhalador, falta_aire, alergia_medico, alergia_polvo_alimentos,
+    alergia_especifica, lentes, enfermedad, enfermedad_especifica, medicamentos,
+    medicamento_especifico, hospitalizacion_12m, emergencia_12m, faltar_colegio_12m,
+    problema_correr, problema_correr_especifico, hipertension_familia,
+    hipertension_convive, diabetes_familia,
+    diabetes_convive, ayuda_enfermo, ayuda_frecuencia, ayuda_tiempo, 
+    crianza, problemas_adulto_hablar, preguntas_estudios, comida_adulto, 
+    casa_colegio_ida, otro_transporte, otro_transporte_2, ida_tiempo, colegio_casa_vuelta,
+    vuelta_tiempo, ida_vuelta_contaminada, area_verde_visita, area_verde_semana,
+    area_verde_tiempo, casa_tipo, casa_pisos, casa_piso_dormir, cuarto_ventanas,
+    cuarto_ventanas_lugar, ventanas_abrir, ventanas_dormir, cuarto_cortinas, 
+    cuarto_alfombra, mascota, mascota_casa, mascota_cuarto, 
+    casa_cucarachas, casa_ratas, casa_humedad, casa_moho, 
+    combustible_cocinar, humo_cocinar, barrio, barrio_seguro, calles_polvo,
+    calle_construcciones, calle_negocios, calle_humo, 
+    calle_humo_momento, calle_humo_momento_2, casa_fuma, casa_humo_semana,
+    
+    # Módulos 9 a 11: Salud mental y nutrición
+    phq9_p1, phq9_p2, phq9_p3, phq9_p4, phq9_p5, phq9_p6, phq9_p7, phq9_p8, phq9_p9,
+    sintomas_ansiedad_1_v3, sintomas_ansiedad_2_v3, sintomas_ansiedad_3_v3,
+    sintomas_ansiedad_4_v3, sintomas_ansiedad_5_v3, sintomas_ansiedad_6_v3,
+    sintomas_ansiedad_7_v3, sintomas_ansiedad_8_v3, sintomas_ansiedad_9_v3,
+    sintomas_ansiedad_10_v3, ahfc_p1, ahfc_p2, ahfc_p3, ahfc_p4, ahfc_p5, 
+    ahfc_p6, ahfc_p7, ahfc_p8, ahfc_p9, ahfc_p10, ahfc_p11, ahfc_p12, ahfc_p13,
+    ahfc_p14, ahfc_p15, ahfc_p16, ahfc_p17, ahfc_p18, ahfc_p19, ahfc_p20, ahfc_p21,
+    ahfc_p22, ahfc_p23, paqc_item1_p1, paqc_item1_p2, paqc_item1_p3, paqc_item1_p4,
+    paqc_item1_p5, paqc_item1_p6, paqc_item1_p7, paqc_item1_p8, paqc_item1_p9, 
+    paqc_item1_p10, paqc_item1_p11, paqc_item1_p12, paqc_item2, paqc_item3, 
+    paqc_item4, paqc_item5, paqc_item6, paqc_item7, paqc_item8, paqc_item9_lunes,
+    paqc_item9_martes, paqc_item9_miercoles, paqc_item9_jueves, paqc_item9_viernes,
+    paqc_item9_sabado, paqc_item9_domingo, paqc_item10, paqc_item10_motivo,
+    encuestador_saludmental_v3, comentario_saludmental_v2,
+    
+    # Módulos 12 a 13: Violencia
+    ebipq_victim1, ebipq_victim2, ebipq_victim3, ebipq_victim4, ebipq_victim5,
+    ebipq_victim6, ebipq_victim7, ebipq_agresion1, ebipq_agresion2, ebipq_agresion3,
+    ebipq_agresion4, ebipq_agresion5, ebipq_agresion6, ebipq_agresion7, 
+    paqc_item1_p1_v2, paqc_item1_p2_v2, paqc_item1_p3_v2, paqc_item1_p4_v2, 
+    paqc_item1_p5_v2, paqc_item1_p6_v2, encuestador_saludmental_v3_v2,
+    comentario_saludmental_v2_v2,
+    
+    # Módulo 14: Antropometría y VO2 max
+    peso1, peso2, peso3, talla1, talla2, talla3, talla_sentado, pliegue_triceps,
+    pliegue_subescapular, pliegue_pantorrilla, perimetro_cuello, perimetro_cintura1,
+    perimetro_cintura2, perimetro_cintura3, perimetro_cadera1, perimetro_cadera2,
+    perimetro_cadera3, perimetro_cadera, masa_grasa_corporal_bio, vo2max_3min,
+    vo2max_sato2_3min, dinamometria1, dinamometria2, dinamometria3, dinamometria_max,
+    encuestador_antropometria_v2, comentario_antropometria_v2,
+    
+    # Módulo 15: Presión arterial
+    pas_toma1, pas_toma2, pas_toma3, pad_toma1, pad_toma2, pad_toma3, bpm_toma1,
+    bpm_toma2, bpm_toma3, encuestador_parterial_v2, comentario_parterial_v2,
+    
+    # Módulo 16: Biomarcadores
+    desayuno, colesterol_total_cohorte, hdl_colesterol_cohorte,
+    ldl_colesterol_cohorte, trigliceridos_cohorte, glucosa_cohorte,
+    encuestador_biomarcadores_v2, comentario_biomarcadores_v2,
+    
+    # Módulo 17: Asma, rinitis y eczema
+    sens_pteronyssinus, sens_farinae, sens_destructor, sens_tropicalis, 
+    sens_arcuatus, sens_alternata, sens_herbarum, sens_fumigatus, sens_notatum,
+    sens_grasses, sens_vulgaris, sens_ambrosia, sens_perro, sens_gato, 
+    sens_germanica, sens_americana, sens_olivo, severidad_asma_med, 
+    severidad_rinitis_med, isaac_asma_p1,
+    isaac_asma_p2, isaac_asma_p3, isaac_asma_p4, isaac_asma_p5, isaac_asma_p6,
+    isaac_asma_p7, isaac_asma_p8, isaac_rinitis_p1, isaac_rinitis_p2,
+    isaac_rinitis_p3, isaac_rinitis_p4, isaac_rinitis_p5, isaac_rinitis_p6,
+    isaac_dermatitis_p1, isaac_dermatitis_p2, isaac_dermatitis_p3, 
+    isaac_dermatitis_p4, isaac_dermatitis_p5, isaac_dermatitis_p6,
+    feno_cohorte, encuestador_alergias_v2, comentario_alergias_v2
+  )
+
+# 2. Calcular indicadores clínicos, puntajes y clasificaciones usando los códigos numéricos originales
+data_clear <- data |>
+  mutate(
+    # -------------------------------------------------------------------------
+    # 1. SOCIODEMOGRÁFICAS Y ESCOLARES
+    # -------------------------------------------------------------------------
+    # Sexo: 0 = Masculino, 1 = Femenino -> estandarizado a 1 = Masculino, 2 = Femenino para OMS/anthroplus/childsds
+    sexo = case_when(
+      sexo_escolar == 0 ~ 1,
+      sexo_escolar == 1 ~ 2,
+      TRUE ~ NA_real_
+    ),
+    sexo_factor = factor(sexo, levels = c(1, 2), labels = c("Masculino", "Femenino")),
+
+    # Edad
+    edad_anios = as.numeric(edad_escolar),
+    edad_meses = edad_anios * 12,
+    edad_cat = factor(edad_anios),
+
+    # Seguro de salud
+    seguro_salud_cat = case_when(
+      seguro_salud == 1 ~ "Seguro Integral de Salud (MINSA)",
+      seguro_salud == 2 ~ "EsSalud",
+      seguro_salud == 3 ~ "Seguro privado",
+      seguro_salud == 4 ~ "No tengo seguro",
+      seguro_salud == 99 ~ "No sabe",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c(
+        "Seguro Integral de Salud (MINSA)", "EsSalud",
+        "Seguro privado", "No tengo seguro", "No sabe"
+      )),
+
+    # Ciudad de estudio (Lima vs Arequipa según colegio_id numérico)
+    ciudad = case_when(
+      colegio_id %in% 1:15 ~ "Lima",
+      colegio_id %in% 16:17 ~ "Arequipa",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Lima", "Arequipa")),
+
+    # -------------------------------------------------------------------------
+    # 2. ANTROPOMETRÍA Y COMPOSICIÓN CORPORAL
+    # -------------------------------------------------------------------------
+    peso_kg = rowMeans(across(c(peso1, peso2, peso3)), na.rm = TRUE),
+    talla_cm = rowMeans(across(c(talla1, talla2, talla3)), na.rm = TRUE),
+    talla_m = talla_cm / 100,
+
+    pliegue_tricipital = as.numeric(pliegue_triceps),
+    pliegue_subescapular = as.numeric(pliegue_subescapular),
+    pliegue_pantorrilla = as.numeric(pliegue_pantorrilla),
+
+    perimetro_cuello = as.numeric(perimetro_cuello),
+    perimetro_cintura = rowMeans(across(c(perimetro_cintura1, perimetro_cintura2, perimetro_cintura3)), na.rm = TRUE),
+    perimetro_cadera_prom = rowMeans(across(c(perimetro_cadera1, perimetro_cadera2, perimetro_cadera3)), na.rm = TRUE),
+    perimetro_pantorrilla = as.numeric(perimetro_cadera),
+
+    imc = peso_kg / (talla_m^2),
+    indice_ponderal = peso_kg / (talla_m^3),
+    indice_cintura_talla = perimetro_cintura / talla_cm,
+    indice_cintura_cadera = perimetro_cintura / perimetro_cadera_prom,
+    WHtR_cat = factor(if_else(indice_cintura_talla >= 0.5, "Riesgo Abdominal", "Normal"), levels = c("Normal", "Riesgo Abdominal")),
+    WHR_cardio = case_when(
+      is.na(indice_cintura_cadera) ~ NA_character_,
+      sexo == 1 & indice_cintura_cadera >= 0.90 ~ "Riesgo",
+      sexo == 2 & indice_cintura_cadera >= 0.80 ~ "Riesgo",
+      TRUE ~ "Saludable"
+    ) |>
+      factor(levels = c("Saludable", "Riesgo")),
+
+    suma_pliegues = (pliegue_tricipital + pliegue_subescapular) / 2,
+
+    grasa_boileau = case_when(
+      sexo == 1 ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.4,
+      sexo == 2 ~ 1.35 * suma_pliegues - 0.012 * (suma_pliegues^2) - 4.2,
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_boileau = (grasa_boileau / 100) * peso_kg,
+
+    grasa_slaughter = case_when(
+      sexo == 1 ~ 0.783 * suma_pliegues + 1.6,
+      sexo == 2 ~ 0.546 * suma_pliegues + 9.7,
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_slaughter = (grasa_slaughter / 100) * peso_kg,
+
+    sexo_deurenberg = if_else(sexo == 1, 1, 0),
+    grasa_deurenberg = (1.51 * imc) - (0.70 * edad_anios) - (3.6 * sexo_deurenberg) + 1.4,
+    masa_grasa_kg_deurenberg = (grasa_deurenberg / 100) * peso_kg,
+
+    grasa_ict = case_when(
+      sexo == 1 ~ 9.775 + (0.415 * suma_pliegues) + (35.084 * indice_cintura_talla) - (0.828 * edad_anios),
+      sexo == 2 ~ 8.608 + (0.291 * suma_pliegues) + (38.893 * indice_cintura_talla) - (0.176 * edad_anios),
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_ict = (grasa_ict / 100) * peso_kg,
+
+    grasa_ip = case_when(
+      sexo == 1 ~ 20.720 + (0.492 * suma_pliegues) + (0.354 * indice_ponderal) - (0.923 * edad_anios),
+      sexo == 2 ~ 16.087 + (0.306 * suma_pliegues) + (0.818 * indice_ponderal) - (0.300 * edad_anios),
+      TRUE ~ NA_real_
+    ),
+    masa_grasa_kg_ip = (grasa_ip / 100) * peso_kg,
+
+    sexo_rfmp = if_else(sexo == 1, 0, 1),
+    RFMp = 74 - (22 * talla_cm / perimetro_cintura) + (5 * sexo_rfmp),
+
+    cintura_m = perimetro_cintura / 100,
+    absi = cintura_m / ((imc^(2 / 3)) * (talla_m^(1 / 2))),
+
+    sexo_rec = if_else(sexo == 1, "male", "female"),
+    wc_percentile = sds(
+      perimetro_cintura,
+      age = edad_anios,
+      sex = sexo_rec, male = "male", female = "female",
+      item = "wc_sharma",
+      ref = us.ref,
+      type = "perc"
+    ),
+    p95_cintura = if_else(wc_percentile >= 0.95, 1, 0),
+    p90_cintura = if_else(wc_percentile >= 0.90, 1, 0),
+
+    z_scores = anthroplus_zscores(
+      sex = sexo,
+      age_in_months = edad_meses,
+      weight_in_kg = peso_kg,
+      height_in_cm = talla_cm
+    )
+  ) |>
+  tidyr::unpack(z_scores) |>
+  mutate(
+    zbfa_dx = case_when(
+      zbfa > 2 ~ "Obesidad",
+      zbfa > 1 ~ "Sobrepeso",
+      zbfa < -2 ~ "Delgadez",
+      !is.na(zbfa) ~ "Normal",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Normal", "Sobrepeso", "Obesidad", "Delgadez")),
+
+    zbfa_exceso = case_when(
+      zbfa > 1 ~ "Exceso de peso",
+      zbfa < -2 ~ "Delgadez",
+      !is.na(zbfa) ~ "Normal",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Normal", "Exceso de peso", "Delgadez")),
+
+    zhfa_dx = case_when(
+      zhfa < -2 ~ "Talla baja",
+      !is.na(zhfa) ~ "Talla Normal",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Talla Normal", "Talla baja")),
+
+    dinamometria = pmax(dinamometria1, dinamometria2, dinamometria3, dinamometria_max, na.rm = TRUE),
+
+    # -------------------------------------------------------------------------
+    # 3. PRESIÓN ARTERIAL Y BIOMARCADORES CARDIOMETABÓLICOS
+    # -------------------------------------------------------------------------
+    PAS = rowMeans(across(c(pas_toma1, pas_toma2, pas_toma3)), na.rm = TRUE),
+    PAD = rowMeans(across(c(pad_toma1, pad_toma2, pad_toma3)), na.rm = TRUE),
+    pulso = rowMeans(across(c(bpm_toma1, bpm_toma2, bpm_toma3)), na.rm = TRUE),
+    sex_pedbp = if_else(sexo == 1, 1L, 0L, missing = NA_integer_),
+
+    glucosa = as.numeric(glucosa_cohorte),
+    colesterol_total = as.numeric(colesterol_total_cohorte),
+    hdl_colesterol = as.numeric(hdl_colesterol_cohorte),
+    ldl_colesterol_directo = as.numeric(ldl_colesterol_cohorte),
+    trigliceridos = as.numeric(trigliceridos_cohorte),
+
+    glucosa_mmol = glucosa / 18.01,
+    trigliceridos_mmol = trigliceridos / 88.57,
+    hdl_mmol = hdl_colesterol / 38.67,
+    LDL_friedewald = colesterol_total - hdl_colesterol - (trigliceridos / 5),
+    LDL_final = coalesce(ldl_colesterol_directo, LDL_friedewald),
+
+    TyG = log((trigliceridos * glucosa) / 2),
+    VAI = case_when(
+      sexo == 1 ~ (perimetro_cintura / (39.68 + (1.88 * imc))) * (trigliceridos_mmol / 1.03) * (1.31 / hdl_mmol),
+      sexo == 2 ~ (perimetro_cintura / (36.58 + (1.89 * imc))) * (trigliceridos_mmol / 0.81) * (1.52 / hdl_mmol),
+      TRUE ~ NA_real_
+    ),
+    TyG_WC = TyG * perimetro_cintura,
+    TyG_BMI = TyG * imc,
+    TyG_WHtR = TyG * indice_cintura_talla,
+    TG_HDL_ratio = trigliceridos / hdl_colesterol,
+
+    TyG_IR = factor(if_else(TyG >= 8.19, "Resistencia a la insulina", "Sin riesgo"), levels = c("Sin riesgo", "Resistencia a la insulina")),
+    riesgo_aterogenico = case_when(
+      TG_HDL_ratio >= 2.2 ~ "Riesgo",
+      TG_HDL_ratio < 2.2 ~ "Normal",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Normal", "Riesgo")),
+
+    VAI_higado = factor(
+      if_else(
+        VAI > 2.33,
+        "Riesgo de hígado graso asociada a disfunción metabólica",
+        "Sin riesgo de hígado graso asociada a disfunción metabólica"
+      ),
+      levels = c(
+        "Sin riesgo de hígado graso asociada a disfunción metabólica",
+        "Riesgo de hígado graso asociada a disfunción metabólica"
+      )
+    ),
+    VAI_sindrome_metabolico = case_when(
+      is.na(VAI) | is.na(sexo) ~ NA_character_,
+      sexo == 1 & VAI >= 1.685 ~ "Alto Riesgo",
+      sexo == 2 & VAI >= 1.875 ~ "Alto Riesgo",
+      TRUE ~ "Saludable (Bajo Riesgo)"
+    ) |>
+      factor(levels = c("Saludable (Bajo Riesgo)", "Alto Riesgo")),
+
+    across(
+      c(TyG_WC, TyG_BMI, TyG_WHtR, TG_HDL_ratio),
+      ~ cut(., breaks = quantile(., probs = seq(0, 1, 0.25), na.rm = TRUE), include.lowest = TRUE, labels = FALSE),
+      .names = "{.col}_q4"
+    ),
+
+    colesterol_total_dx = case_when(
+      colesterol_total >= 200 ~ "Alto",
+      colesterol_total >= 170 ~ "Límite",
+      colesterol_total < 170 ~ "Aceptable"
+    ) |>
+      factor(levels = c("Aceptable", "Límite", "Alto")),
+
+    LDL_dx = case_when(
+      LDL_final >= 130 ~ "Alto",
+      LDL_final >= 110 ~ "Límite",
+      LDL_final < 110 ~ "Aceptable"
+    ) |>
+      factor(levels = c("Aceptable", "Límite", "Alto")),
+
+    HDL_dx = case_when(
+      hdl_colesterol < 40 ~ "Bajo",
+      hdl_colesterol <= 45 ~ "Límite",
+      hdl_colesterol > 45 ~ "Aceptable"
+    ) |>
+      factor(levels = c("Aceptable", "Límite", "Bajo")),
+
+    TG_dx = case_when(
+      trigliceridos >= 130 ~ "Alto",
+      trigliceridos >= 90 ~ "Límite",
+      trigliceridos < 90 ~ "Aceptable"
+    ) |>
+      factor(levels = c("Aceptable", "Límite", "Alto")),
+
+    TG_LDL_dx = case_when(
+      LDL_final >= 130 | colesterol_total >= 200 ~ "Hipercolesterolemia",
+      LDL_final >= 110 | colesterol_total >= 170 ~ "Hipercolesterolemia",
+      !is.na(LDL_final) | !is.na(colesterol_total) ~ "Aceptable",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Aceptable", "Hipercolesterolemia")),
+
+    dyslipidemia_algorithm = case_when(
+      LDL_final >= 130 | trigliceridos >= 130 | hdl_colesterol < 40 ~ "Dislipidemia",
+      !is.na(LDL_final) & !is.na(trigliceridos) & !is.na(hdl_colesterol) ~ "Saludable",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Saludable", "Dislipidemia")),
+
+    perfil_aterogenico_dx = case_when(
+      trigliceridos >= 130 & hdl_colesterol < 40 ~ "Dislipidemia aterogénica",
+      trigliceridos >= 130 | hdl_colesterol < 40 ~ "Riesgo aislado",
+      (trigliceridos >= 90 & trigliceridos < 130) | (hdl_colesterol >= 40 & hdl_colesterol <= 45) ~ "Límite",
+      !is.na(trigliceridos) & !is.na(hdl_colesterol) ~ "Aceptable",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Aceptable", "Límite", "Riesgo aislado", "Dislipidemia aterogénica"))
+  )
+
+# Percentiles pediátricos de presión arterial (pedbp)
+idx_bp <- which(!is.na(data_clear$sex_pedbp) & !is.na(data_clear$edad_meses))
+
+bp_percentiles <- p_bp(
+  q_sbp  = data_clear$PAS[idx_bp],
+  q_dbp  = data_clear$PAD[idx_bp],
+  age    = data_clear$edad_meses[idx_bp],
+  male   = data_clear$sex_pedbp[idx_bp],
+  height = data_clear$talla_cm[idx_bp]
+)
+
+bp_p95_reference <- q_bp(
+  p_sbp  = 0.95,
+  p_dbp  = 0.95,
+  age    = data_clear$edad_meses[idx_bp],
+  male   = data_clear$sex_pedbp[idx_bp],
+  height = data_clear$talla_cm[idx_bp]
+)
+
+data_clear <- data_clear |>
+  mutate(
+    sbp_p = NA_real_,
+    dbp_p = NA_real_,
+    p95_sbp_mmHg = NA_real_,
+    p95_dbp_mmHg = NA_real_
+  )
+
+data_clear$sbp_p[idx_bp] <- bp_percentiles$sbp_p * 100
+data_clear$dbp_p[idx_bp] <- bp_percentiles$dbp_p * 100
+data_clear$p95_sbp_mmHg[idx_bp] <- bp_p95_reference$sbp
+data_clear$p95_dbp_mmHg[idx_bp] <- bp_p95_reference$dbp
+
+data_clear <- data_clear |>
+  mutate(
+    crit_tg      = if_else(trigliceridos_mmol >= 1.24, 1, 0),
+    crit_hdl     = if_else(hdl_mmol <= 1.03, 1, 0),
+    crit_glucosa = if_else(glucosa_mmol >= 5.6, 1, 0),
+
+    p95_bp = if_else(sbp_p >= 95 | dbp_p >= 95, 1, 0),
+    p90_bp = if_else(sbp_p >= 90 | dbp_p >= 90, 1, 0),
+
+    bp_category = case_when(
+      edad_anios >= 13 ~ case_when(
+        PAS >= 120 | PAD >= 80 ~ "Elevada",
+        PAS < 120 & PAD < 80 ~ "Normal",
+        TRUE ~ NA_character_
+      ),
+      edad_anios < 13 ~ case_when(
+        sbp_p >= 90 | dbp_p >= 90 | PAS >= 120 | PAD >= 80 ~ "Elevada",
+        sbp_p < 90 & dbp_p < 90 & PAS < 120 & PAD < 80 ~ "Normal",
+        TRUE ~ NA_character_
+      ),
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Normal", "Elevada")),
+
+    n_metabolic_abnormalities = rowSums(across(c(p95_cintura, crit_tg, crit_hdl, p90_bp, crit_glucosa)), na.rm = TRUE),
+    metabolic_health = factor(
+      if_else(n_metabolic_abnormalities >= 2, "No saludable", "Saludable"),
+      levels = c("Saludable", "No saludable")
+    ),
+
+    cintura_FID = if_else(p90_cintura == 1, 1, 0),
+    glucosa_FID = if_else(glucosa >= 100, 1, 0),
+    TG_FID = if_else(trigliceridos >= 150, 1, 0),
+    HDL_FID = if_else(hdl_colesterol < 40, 1, 0),
+    presion_FID = if_else(PAS >= 130 | PAD >= 85, 1, 0),
+    n_criterios_secundarios = rowSums(across(c(glucosa_FID, TG_FID, HDL_FID, presion_FID)), na.rm = TRUE),
+
+    sindrome_metabolico = case_when(
+      cintura_FID == 1 & n_criterios_secundarios >= 2 ~ "Sí",
+      cintura_FID == 0 | n_criterios_secundarios < 2 ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    # -------------------------------------------------------------------------
+    # 4. SALUD MENTAL (PHQ-9 Y ANSIEDAD)
+    # -------------------------------------------------------------------------
+    PHQ_9 = if_else(
+      if_all(phq9_p1:phq9_p9, is.na),
+      NA_real_,
+      rowSums(across(phq9_p1:phq9_p9), na.rm = TRUE)
+    ),
+    depresion = case_when(
+      PHQ_9 <= 4 ~ "Sin depresión o mínima",
+      PHQ_9 >= 5 & PHQ_9 <= 9 ~ "Leve",
+      PHQ_9 >= 10 & PHQ_9 <= 14 ~ "Moderada",
+      PHQ_9 >= 15 & PHQ_9 <= 19 ~ "Moderadamente severa",
+      PHQ_9 >= 20 ~ "Severa",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Sin depresión o mínima", "Leve", "Moderada", "Moderadamente severa", "Severa")),
+
+    depresion_alt = case_when(
+      PHQ_9 <= 4 ~ "Sin depresión o mínima",
+      PHQ_9 >= 5 & PHQ_9 <= 9 ~ "Leve",
+      PHQ_9 >= 10 ~ "Moderada o Severa",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Sin depresión o mínima", "Leve", "Moderada o Severa")),
+
+    ansiedad_raw = if_else(
+      if_all(sintomas_ansiedad_1_v3:sintomas_ansiedad_10_v3, is.na),
+      NA_real_,
+      rowSums(across(sintomas_ansiedad_1_v3:sintomas_ansiedad_10_v3), na.rm = TRUE)
+    ),
+
+    ansiedad_apa_mean = if_else(
+      rowSums(!is.na(across(sintomas_ansiedad_1_v3:sintomas_ansiedad_10_v3))) >= 8,
+      rowMeans(across(sintomas_ansiedad_1_v3:sintomas_ansiedad_10_v3), na.rm = TRUE),
+      NA_real_
+    ),
+
+    ansiedad = case_when(
+      is.na(ansiedad_apa_mean) ~ NA_character_,
+      ansiedad_apa_mean < 0.5 ~ "Ninguna o mínima",
+      ansiedad_apa_mean < 1.5 ~ "Leve",
+      ansiedad_apa_mean < 2.5 ~ "Moderada",
+      ansiedad_apa_mean < 3.5 ~ "Severa",
+      TRUE ~ "Extrema"
+    ) |>
+      factor(levels = c("Ninguna o mínima", "Leve", "Moderada", "Severa", "Extrema")),
+
+    ansiedad_alt = case_when(
+      is.na(ansiedad_apa_mean) ~ NA_character_,
+      ansiedad_apa_mean < 0.5 ~ "Ninguna o mínima",
+      ansiedad_apa_mean < 1.5 ~ "Leve",
+      TRUE ~ "Moderada a extrema"
+    ) |>
+      factor(levels = c("Ninguna o mínima", "Leve", "Moderada a extrema")),
+
+    # -------------------------------------------------------------------------
+    # 5. NUTRICIÓN (AFHC)
+    # -------------------------------------------------------------------------
+    across(
+      .cols = ahfc_p1:ahfc_p23 & !all_of(c("ahfc_p3", "ahfc_p8", "ahfc_p14", "ahfc_p18", "ahfc_p21")),
+      .fns = ~ case_when(
+        .x == 1 ~ 1,
+        .x == 0 ~ 0,
+        .x == 2 ~ NA_real_,
+        TRUE ~ NA_real_
+      ),
+      .names = "{.col}_pts"
+    ),
+    across(
+      .cols = all_of(c("ahfc_p3", "ahfc_p8", "ahfc_p14", "ahfc_p18", "ahfc_p21")),
+      .fns = ~ case_when(
+        .x == 1 ~ 0,
+        .x == 0 ~ 1,
+        .x == 2 ~ NA_real_,
+        TRUE ~ NA_real_
+      ),
+      .names = "{.col}_pts"
+    )
+  ) |>
+  rowwise() |>
+  mutate(
+    n_saludables = sum(c_across(ends_with("_pts")), na.rm = TRUE),
+    n_completados = sum(!is.na(c_across(ends_with("_pts")))),
+    afhc_score = if_else(n_completados > 0, n_saludables * (23 / n_completados), NA_real_)
+  ) |>
+  ungroup() |>
+  mutate(
+    categoria_afhc = factor(
+      if_else(afhc_score >= 11, "Saludable", "No saludable"),
+      levels = c("Saludable", "No saludable")
+    ),
+
+    # -------------------------------------------------------------------------
+    # 6. ACTIVIDAD FÍSICA (PAQ-C)
+    # -------------------------------------------------------------------------
+    paqc_item1_score = rowMeans(across(paqc_item1_p1:paqc_item1_p12, ~ as.numeric(.x) + 1), na.rm = TRUE),
+
+    paqc_2_num = if_else(paqc_item2 == 0, NA_real_, as.numeric(paqc_item2) + 1),
+    paqc_3_num = as.numeric(paqc_item3),
+    paqc_4_num = as.numeric(paqc_item4),
+    paqc_5_num = as.numeric(paqc_item5) + 1,
+    paqc_6_num = as.numeric(paqc_item6) + 1,
+    paqc_7_num = as.numeric(paqc_item7) + 1,
+    paqc_8_num = as.numeric(paqc_item8),
+
+    paq_item9_score = rowMeans(
+      across(paqc_item9_lunes:paqc_item9_domingo, ~ as.numeric(.x) + 1),
+      na.rm = TRUE
+    ),
+
+    paqc_final_score = rowMeans(
+      across(c(
+        paqc_item1_score, paqc_2_num, paqc_3_num, paqc_4_num,
+        paqc_5_num, paqc_6_num, paqc_7_num, paqc_8_num, paq_item9_score
+      )),
+      na.rm = TRUE
+    ),
+
+    paqc_dx = case_when(
+      paqc_final_score < 2 ~ "Actividad Baja",
+      paqc_final_score >= 2 & paqc_final_score < 4 ~ "Actividad Moderada",
+      paqc_final_score >= 4 ~ "Actividad Alta",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("Actividad Alta", "Actividad Moderada", "Actividad Baja")),
+
+    # -------------------------------------------------------------------------
+    # 7. VIOLENCIA (EBIPQ Y HOGAR)
+    # -------------------------------------------------------------------------
+    ebipq_victimizacion_score = if_else(
+      if_all(ebipq_victim1:ebipq_victim7, is.na),
+      NA_real_,
+      rowSums(across(ebipq_victim1:ebipq_victim7), na.rm = TRUE)
+    ),
+    ebipq_agresion_score = if_else(
+      if_all(ebipq_agresion1:ebipq_agresion7, is.na),
+      NA_real_,
+      rowSums(across(ebipq_agresion1:ebipq_agresion7), na.rm = TRUE)
+    ),
+    violencia_hogar_score = if_else(
+      if_all(paqc_item1_p1_v2:paqc_item1_p6_v2, is.na),
+      NA_real_,
+      rowSums(across(paqc_item1_p1_v2:paqc_item1_p6_v2), na.rm = TRUE)
+    ),
+
+    # -------------------------------------------------------------------------
+    # 8. ALERGIAS, ASMA, RINITIS, ECZEMA (ISAAC) Y FeNO
+    # -------------------------------------------------------------------------
+    feno = as.numeric(feno_cohorte),
+
+    alergia_acaros_polvo = case_when(
+      if_any(c(sens_pteronyssinus, sens_farinae, sens_tropicalis, sens_destructor, sens_arcuatus), ~ .x == 1) ~ "Sí",
+      if_all(c(sens_pteronyssinus, sens_farinae, sens_tropicalis, sens_destructor, sens_arcuatus), ~ .x == 0) ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    alergia_hongos = case_when(
+      if_any(c(sens_alternata, sens_herbarum, sens_fumigatus, sens_notatum), ~ .x == 1) ~ "Sí",
+      if_all(c(sens_alternata, sens_herbarum, sens_fumigatus, sens_notatum), ~ .x == 0) ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    alergia_mascotas = case_when(
+      if_any(c(sens_perro, sens_gato), ~ .x == 1) ~ "Sí",
+      if_all(c(sens_perro, sens_gato), ~ .x == 0) ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    alergia_cucarachas = case_when(
+      if_any(c(sens_germanica, sens_americana), ~ .x == 1) ~ "Sí",
+      if_all(c(sens_germanica, sens_americana), ~ .x == 0) ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    alergia_polenes = case_when(
+      if_any(c(sens_grasses, sens_vulgaris, sens_ambrosia, sens_olivo), ~ .x == 1) ~ "Sí",
+      if_all(c(sens_grasses, sens_vulgaris, sens_ambrosia, sens_olivo), ~ .x == 0) ~ "No",
+      TRUE ~ NA_character_
+    ) |>
+      factor(levels = c("No", "Sí")),
+
+    # ISAAC Asma (en factor Sí/No directamente)
+    ASMA_VIDA = factor(if_else(isaac_asma_p1 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ASMA_ACTUAL = factor(if_else(isaac_asma_p2 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ASMA_DIAG = factor(if_else(isaac_asma_p6 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ASMA_SEVERA = factor(
+      if_else(isaac_asma_p2 == 1 & (isaac_asma_p3 == 3 | isaac_asma_p4 == 2 | isaac_asma_p5 == 1), "Sí", "No", missing = "No"),
+      levels = c("No", "Sí")
+    ),
+    ASMA_LEVE_MOD = factor(
+      if_else(isaac_asma_p2 == 1 & isaac_asma_p3 != 3 & isaac_asma_p4 != 2 & isaac_asma_p5 == 0, "Sí", "No", missing = "No"),
+      levels = c("No", "Sí")
+    ),
+    ASMA_EJERCICIO = factor(if_else(isaac_asma_p7 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ASMA_TOS = factor(if_else(isaac_asma_p8 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+
+    # ISAAC Rinitis
+    RINITIS_VIDA = factor(if_else(isaac_rinitis_p1 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_ACTUAL = factor(if_else(isaac_rinitis_p2 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_DIAG = factor(if_else(isaac_rinitis_p6 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_ESPORADICA = factor(if_else(isaac_rinitis_p2 == 1 & isaac_rinitis_p3 == 0, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_INTERMITENTE = factor(if_else(isaac_rinitis_p2 == 1 & isaac_rinitis_p3 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_PERSISTENTE = factor(if_else(isaac_rinitis_p2 == 1 & isaac_rinitis_p3 == 2, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINITIS_MOD_SEV = factor(if_else(isaac_rinitis_p2 == 1 & isaac_rinitis_p4 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    RINOCONJUNTIVITIS = factor(if_else(isaac_rinitis_p2 == 1 & isaac_rinitis_p5 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+
+    # ISAAC Eczema / Dermatitis
+    ECZEMA_VIDA = factor(if_else(isaac_dermatitis_p1 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_ACTUAL = factor(if_else(isaac_dermatitis_p2 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_DIAG = factor(if_else(isaac_dermatitis_p6 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_TIPICO = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p3 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_RECURRENTE = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p4 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_LEVE = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p5 == 0, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_LEVE_MOD = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p5 == 1, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_MODERADO = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p5 == 2, "Sí", "No", missing = "No"), levels = c("No", "Sí")),
+    ECZEMA_SEVERO = factor(if_else(isaac_dermatitis_p2 == 1 & isaac_dermatitis_p5 == 3, "Sí", "No", missing = "No"), levels = c("No", "Sí"))
+  ) |>
+  dplyr::select(-ends_with("_pts"), -ends_with("_num"))
+
+# 3. Función auxiliar para factorizar en el MISMO nombre de variable (sin sufijo .factor)
+convertir_a_factor <- function(df, vars, mapa) {
+  df |>
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::all_of(vars),
+        ~ factor(as.character(.x), levels = names(mapa), labels = mapa)
+      )
+    )
+}
+
+# 4. Convertir todas las variables categóricas originales directamente a factor
+data_clear <- data_clear |>
+  # Escalas compartidas (0=No, 1=Sí, 99=No sabe)
+  convertir_a_factor(
+    c("direccion_conoce", "cuarto_compartido", "asma_medico", "inhalador", "falta_aire",
+      "alergia_medico", "alergia_polvo_alimentos", "enfermedad", "medicamentos",
+      "hospitalizacion_12m", "emergencia_12m", "problema_correr", "hipertension_familia",
+      "hipertension_convive", "diabetes_familia", "diabetes_convive", "ayuda_enfermo",
+      "otro_transporte", "casa_pisos", "cuarto_ventanas", "cuarto_cortinas", "cuarto_alfombra",
+      "mascota", "mascota_casa", "mascota_cuarto", "casa_cucarachas", "casa_ratas",
+      "casa_humedad", "casa_moho", "calles_polvo", "calle_construcciones", "calle_negocios",
+      "casa_fuma", "isaac_asma_p6", "isaac_asma_p7", "isaac_rinitis_p4", "isaac_rinitis_p5",
+      "isaac_rinitis_p6", "isaac_dermatitis_p3", "isaac_dermatitis_p4"),
+    c("0" = "No", "1" = "Sí", "99" = "No sabe")
+  ) |>
+  # Escala (0=No, 1=Sí)
+  convertir_a_factor(
+    c("lentes", "paqc_item10", "isaac_asma_p1", "isaac_asma_p2", "isaac_asma_p5",
+      "isaac_rinitis_p1", "isaac_rinitis_p2", "isaac_dermatitis_p1", "isaac_dermatitis_p2",
+      "isaac_dermatitis_p6"),
+    c("0" = "No", "1" = "Sí")
+  ) |>
+  # Escala (0=No, 1=Sí, 99=No sabe)
+  convertir_a_factor("isaac_asma_p8", c("0" = "No", "1" = "Sí", "99" = "No sabe")) |>
+  # Escala (0=No, 1=Sí, 99=No recuerda)
+  convertir_a_factor(c("area_verde_visita", "casa_humo_semana"), c("0" = "No", "1" = "Sí", "99" = "No recuerda")) |>
+  # Escala Transporte (Ida y Vuelta)
+  convertir_a_factor(
+    c("casa_colegio_ida", "colegio_casa_vuelta"),
+    c("0" = "Caminando", "1" = "Bicicleta", "2" = "Bus / combi / Metropolitano",
+      "3" = "Tren / metro", "4" = "Carro / taxi / movilidad escolar", "5" = "Moto / mototaxi",
+      "6" = "Otro", "99" = "No sabe")
+  ) |>
+  # Escala Tiempo de viaje (Ida y Vuelta)
+  convertir_a_factor(
+    c("ida_tiempo", "vuelta_tiempo"),
+    c("0" = "Menos de 10 minutos", "1" = "10 a 20 minutos", "2" = "21 a 40 minutos",
+      "3" = "Más de 40 minutos", "99" = "No sabe")
+  ) |>
+  # Escala PHQ-9 (Depresión)
+  convertir_a_factor(
+    paste0("phq9_p", 1:9),
+    c("0" = "Nunca", "1" = "Varios días", "2" = "Más de la mitad de los días", "3" = "Casi todos los días")
+  ) |>
+  # Escala Ansiedad
+  convertir_a_factor(
+    paste0("sintomas_ansiedad_", 1:10, "_v3"),
+    c("0" = "Nunca", "1" = "Ocasionalmente", "2" = "Mitad del tiempo",
+      "3" = "La mayor parte del tiempo", "4" = "Todo el tiempo")
+  ) |>
+  # Escala AHFC (Nutrición)
+  convertir_a_factor(
+    paste0("ahfc_p", 1:23),
+    c("0" = "Falso", "1" = "Verdadero", "2" = "Nunca ocurre")
+  ) |>
+  # Escala PAQ-C ítem 1 (1 al 12)
+  convertir_a_factor(
+    paste0("paqc_item1_p", 1:12),
+    c("0" = "Nunca", "1" = "1-2 veces", "2" = "3-4 veces", "3" = "5-6 veces", "4" = "7+ veces")
+  ) |>
+  # Escala PAQ-C ítems 3 y 4
+  convertir_a_factor(
+    c("paqc_item3", "paqc_item4"),
+    c("1" = "Estuve sentado(a) (hablar, leer, trabajo de clases, revisar el celular)",
+      "2" = "Estuve de pie o caminando", "3" = "Corrí o jugué un poco",
+      "4" = "Corrí y jugué bastante", "5" = "Corrí y jugué intensamente la mayor parte del tiempo")
+  ) |>
+  # Escala PAQ-C ítem 9 (Lunes a Domingo)
+  convertir_a_factor(
+    paste0("paqc_item9_", c("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")),
+    c("0" = "Ninguna", "1" = "A veces", "2" = "Regular", "3" = "Frecuente", "4" = "Muy frecuente")
+  ) |>
+  # Escala EBIPQ (Victimización y Agresión)
+  convertir_a_factor(
+    c(paste0("ebipq_victim", 1:7), paste0("ebipq_agresion", 1:7)),
+    c("0" = "No", "1" = "1-2 veces", "2" = "1-2 veces/mes", "3" = "1 vez/semana", "4" = "Más de 1 vez/semana")
+  ) |>
+  # Escala Violencia en casa (paqc_item1_p1_v2 a p6_v2)
+  convertir_a_factor(
+    paste0("paqc_item1_p", 1:6, "_v2"),
+    c("0" = "Nunca", "1" = "Una vez", "2" = "Algunas veces", "3" = "Muchas veces", "4" = "Todos los días")
+  ) |>
+  # Escala Prick Test / Sensibilización (17 alérgenos)
+  convertir_a_factor(
+    c("sens_pteronyssinus", "sens_farinae", "sens_destructor", "sens_tropicalis",
+      "sens_arcuatus", "sens_alternata", "sens_herbarum", "sens_fumigatus",
+      "sens_notatum", "sens_grasses", "sens_vulgaris", "sens_ambrosia",
+      "sens_perro", "sens_gato", "sens_germanica", "sens_americana", "sens_olivo"),
+    c("0" = "Negativo", "1" = "Positivo")
+  ) |>
+  # Escalas individuales específicas
+  convertir_a_factor("colegio_id", c(
+    "1" = "Colegio Jorge Basadre - VMT", "2" = "Colegio Santísima Virgen de Chapi - Pachacamac",
+    "3" = "Colegio 0028 Jesus y María - La Molina", "4" = "Colegio Quinones - Barranco",
+    "5" = "Colegio 1088 Bolognesi - Magdalena", "6" = "Colegio Jardines de Manchay - Pachacamac",
+    "7" = "Colegio 105 P Coronado - Centro de Lima", "8" = "Colegio Peruano Suizo - Comas",
+    "9" = "Colegio 2055 P Abril - Comas", "10" = "Colegio Micaela Bastidas - Los Olivos",
+    "11" = "Colegio Carbajal - Ate", "12" = "Colegio Carmelitas - VMT",
+    "13" = "Colegio 7265 Mariategui - Pachacamac", "14" = "Colegio 125 Ricardo Palma - SJL",
+    "15" = "Colegio La Gloria, Ate", "16" = "Colegio de la Salle - Arequipa",
+    "17" = "Colegio San Marcos - Arequipa"
+  )) |>
+  convertir_a_factor("grado_escolar", c("0" = "Primero", "1" = "Segundo", "2" = "Tercero", "3" = "Cuarto", "4" = "Quinto")) |>
+  convertir_a_factor("sexo_escolar", c("0" = "Masculino", "1" = "Femenino")) |>
+  convertir_a_factor("tiempo_casa", c(
+    "1" = "Menos de 1 año", "2" = "1 a 3 años", "3" = "4 a 6 años",
+    "4" = "Más de 6 años", "5" = "Desde que nací", "99" = "No sabe"
+  )) |>
+  convertir_a_factor("seguro_salud", c(
+    "1" = "SIS", "2" = "EsSalud", "3" = "Seguro privado", "4" = "No tengo seguro", "99" = "No sabe"
+  )) |>
+  convertir_a_factor("faltar_colegio_12m", c(
+    "0" = "No", "1" = "Sí, 1 día", "2" = "Sí, 2 a 3 días", "3" = "Sí, 4 días o más", "99" = "No recuerda"
+  )) |>
+  convertir_a_factor("ayuda_frecuencia", c(
+    "0" = "Casi nunca", "1" = "Algunos días", "2" = "Casi todos los días", "3" = "Todos los días"
+  )) |>
+  convertir_a_factor("ayuda_tiempo", c(
+    "0" = "No", "1" = "Un poco", "2" = "Bastante", "3" = "Mucho", "99" = "Prefiero no responder"
+  )) |>
+  convertir_a_factor("crianza", c(
+    "0" = "Mamá", "1" = "Papá", "2" = "Abuelo/a", "3" = "Tío/a", "4" = "Hermano/a", "5" = "Otra persona", "99" = "No sabe"
+  )) |>
+  convertir_a_factor("problemas_adulto_hablar", c("0" = "No", "1" = "Sí", "2" = "A veces", "99" = "Prefiero no responder")) |>
+  convertir_a_factor("preguntas_estudios", c("0" = "Nunca", "1" = "A veces", "2" = "Casi siempre", "3" = "Siempre")) |>
+  convertir_a_factor("comida_adulto", c("0" = "Nunca", "1" = "Algunos días", "2" = "Casi todos los días", "3" = "Todos los días")) |>
+  convertir_a_factor("ida_vuelta_contaminada", c("0" = "Nunca", "1" = "A veces", "2" = "Casi siempre", "3" = "Siempre", "99" = "No sabe")) |>
+  convertir_a_factor("area_verde_semana", c("0" = "1 día", "1" = "2 a 3 días", "2" = "4 a 5 días", "3" = "6 a 7 días", "99" = "No sabe")) |>
+  convertir_a_factor("area_verde_tiempo", c("0" = "Menos de 30 minutos", "1" = "30 minutos a 1 hora", "2" = "1 a 2 horas", "3" = "Más de 2 horas", "99" = "No sabe")) |>
+  convertir_a_factor("casa_tipo", c("0" = "Casa", "1" = "Departamento", "2" = "Cuarto alquilado", "3" = "Casa compartida con otras familias", "4" = "Otro", "99" = "No sabe")) |>
+  convertir_a_factor("casa_piso_dormir", c("0" = "Primer piso", "1" = "Segundo piso", "2" = "Tercer piso o más", "99" = "No sabe")) |>
+  convertir_a_factor("cuarto_ventanas_lugar", c("0" = "Calle o avenida", "1" = "Patio o jardín", "2" = "Pasadizo interno", "3" = "No tiene ventana", "4" = "Otro", "99" = "No sabe")) |>
+  convertir_a_factor("ventanas_abrir", c("0" = "Nunca", "1" = "Poco tiempo", "2" = "Varias horas", "3" = "Casi todo el día", "99" = "No sabe")) |>
+  convertir_a_factor("ventanas_dormir", c("0" = "Abierta", "1" = "Entreabierta", "2" = "Cerrada", "99" = "No sabe")) |>
+  convertir_a_factor("combustible_cocinar", c("0" = "Gas de balón", "1" = "Gas natural", "2" = "Cocina eléctrica", "3" = "Leña", "4" = "Carbón", "5" = "Otro", "99" = "No sabe")) |>
+  convertir_a_factor("humo_cocinar", c("0" = "Nunca", "1" = "A veces", "2" = "Muchas veces", "99" = "No sabe")) |>
+  convertir_a_factor("barrio", c("0" = "No", "1" = "Más o menos", "2" = "Sí", "99" = "Prefiero no responder")) |>
+  convertir_a_factor("barrio_seguro", c("0" = "No", "1" = "Más o menos", "2" = "Sí", "3" = "No salgo solo/a", "99" = "No sabe")) |>
+  convertir_a_factor("calle_humo", c("0" = "Nunca", "1" = "Algunos días", "2" = "Casi todos los días", "3" = "Todos los días", "99" = "No sabe")) |>
+  convertir_a_factor("calle_humo_momento", c("0" = "Mañana", "1" = "Tarde", "2" = "Noche", "3" = "Todo el día", "99" = "No sabe")) |>
+  convertir_a_factor("calle_humo_momento_2", c("0" = "No", "1" = "Sí, un poco", "2" = "Sí, mucho", "99" = "No sabe")) |>
+  convertir_a_factor("paqc_item2", c("0" = "No tengo curso de educación física", "1" = "Casi nunca", "2" = "Algunas veces", "3" = "A menudo", "4" = "Siempre")) |>
+  convertir_a_factor("paqc_item5", c("0" = "Ninguna vez", "1" = "1 vez la semana pasada", "2" = "2 o 3 veces la semana pasada", "3" = "4 veces la semana pasada", "4" = "5 veces la semana pasada")) |>
+  convertir_a_factor("paqc_item6", c("0" = "Ninguna vez", "1" = "1 vez en la semana pasada", "2" = "2 o 3 veces la semana pasada", "3" = "4 o 5 veces la semana pasada", "4" = "6 o 7 veces la semana pasada")) |>
+  convertir_a_factor("paqc_item7", c("0" = "Ninguna vez", "1" = "1 vez en el último fin de semana", "2" = "2 o 3 veces el último fin de semana", "3" = "4 o 5 veces el último fin de semana", "4" = "6 o más veces el último fin de semana")) |>
+  convertir_a_factor("paqc_item8", c(
+    "1" = "Todo o la mayoría de mi tiempo libre lo dedique a actividades que requieren poco esfuerzo físico.",
+    "2" = "A veces (1 o 2 veces la semana pasada) hacía actividad física en mi tiempo libre.",
+    "3" = "A menudo (3 o 4 veces la semana pasada) hacía actividad física en mi tiempo libre.",
+    "4" = "Con bastante frecuencia (5 o 6 veces la semana pasada) hice actividad física en mi tiempo libre.",
+    "5" = "Muy a menudo (7 o más veces la semana pasada) hice actividad física en mi tiempo libre."
+  )) |>
+  convertir_a_factor("desayuno", c("0" = "No desayunó (ayunas ≥ 8 horas)", "1" = "Sí desayunó parcialmente (< 8 horas)", "2" = "Sí desayunó (comida completa)")) |>
+  convertir_a_factor("severidad_asma_med", c("1" = "Asma intermitente", "2" = "Asma persistente leve", "3" = "Asma persistente moderada", "4" = "Asma persistente severa", "0" = "No aplica")) |>
+  convertir_a_factor("severidad_rinitis_med", c("1" = "Rinitis intermitente leve", "2" = "Rinitis intermitente moderada-severa", "3" = "Rinitis persistente leve", "4" = "Rinitis persistente moderada-severa", "0" = "No aplica")) |>
+  convertir_a_factor("isaac_asma_p3", c("0" = "Ninguno", "1" = "1 a 3", "2" = "4 a 12", "3" = "Más de 12")) |>
+  convertir_a_factor("isaac_asma_p4", c("0" = "Nunca", "1" = "Menos de una noche por semana", "2" = "Una o más noches por semana")) |>
+  convertir_a_factor("isaac_rinitis_p3", c("0" = "Menos de 1 mes al año", "1" = "1 a 3 meses al año", "2" = "4 o más meses al año")) |>
+  convertir_a_factor("isaac_dermatitis_p5", c("0" = "No ha afectado mi sueño", "1" = "Ha afectado ligeramente mi sueño", "2" = "Ha afectado moderadamente mi sueño", "3" = "Ha afectado severamente mi sueño"))
+
+# 5. Asignar etiquetas cortas (al final para que todas las variables y factores las conserven)
+data_clear <- data_clear |>
+  labelled::set_variable_labels(
+    # Módulos 1 a 8: Salud y ambiente
+    nombre_escolar = "Nombre completo",
+    id = "ID escolar",
+    colegio = "Colegio (texto)",
+    colegio_id = "Colegio",
+    ciudad = "Ciudad",
+    grado_escolar = "Grado escolar",
+    edad_escolar = "Edad (años)",
+    edad_anios = "Edad (años)",
+    edad_cat = "Edad del escolar (años)",
+    pariente_del_infante_2_v2 = "Fecha de nacimiento",
+    sexo_escolar = "Sexo",
+    sexo_factor = "Sexo",
+    distrito = "Distrito de residencia",
+    direccion_conoce = "Conoce dirección",
+    direccion = "Dirección domiciliaria",
+    tiempo_casa = "Tiempo viviendo en casa",
+    cuantos_casa = "Personas en el hogar",
+    cuarto_compartido = "Comparte dormitorio",
+    cuarto_cuantas = "Personas en dormitorio",
+    seguro_salud = "Seguro de salud (original)",
+    seguro_salud_cat = "Seguro de salud",
+    asma_medico = "Diagnóstico médico de asma",
+    inhalador = "Uso de inhalador",
+    falta_aire = "Disnea/sibilancias al ejercicio (12m)",
+    alergia_medico = "Diagnóstico médico de alergia",
+    alergia_polvo_alimentos = "Alergia reportada",
+    alergia_especifica = "Alergia (detalle)",
+    lentes = "Usa lentes",
+    enfermedad = "Enfermedad crónica",
+    enfermedad_especifica = "Enfermedad crónica (detalle)",
+    medicamentos = "Medicación crónica (>3m)",
+    medicamento_especifico = "Medicación crónica (detalle)",
+    hospitalizacion_12m = "Hospitalización (12m)",
+    emergencia_12m = "Atención por emergencia (12m)",
+    faltar_colegio_12m = "Ausentismo escolar por enfermedad (1m)",
+    problema_correr = "Limitación física para deporte",
+    problema_correr_especifico = "Limitación física (detalle)",
+    hipertension_familia = "Antecedente familiar de HTA",
+    hipertension_convive = "Convive con familiar con HTA",
+    diabetes_familia = "Antecedente familiar de diabetes",
+    diabetes_convive = "Convive con familiar con diabetes",
+    ayuda_enfermo = "Cuida a familiar enfermo/mayor",
+    ayuda_frecuencia = "Frecuencia de cuidado familiar",
+    ayuda_tiempo = "Cuidado afecta estudio/descanso",
+    crianza = "Cuidador principal",
+    problemas_adulto_hablar = "Adulto de confianza en casa",
+    preguntas_estudios = "Supervisión escolar en casa",
+    comida_adulto = "Come acompañado de adulto",
+    casa_colegio_ida = "Transporte de ida al colegio",
+    otro_transporte = "Usa transporte adicional (ida)",
+    otro_transporte_2 = "Transporte adicional (detalle)",
+    ida_tiempo = "Tiempo de viaje (ida)",
+    colegio_casa_vuelta = "Transporte de vuelta a casa",
+    vuelta_tiempo = "Tiempo de viaje (vuelta)",
+    ida_vuelta_contaminada = "Tránsito por avenidas congestionadas",
+    area_verde_visita = "Visita áreas verdes (7d)",
+    area_verde_semana = "Días en áreas verdes (7d)",
+    area_verde_tiempo = "Tiempo por visita a área verde",
+    casa_tipo = "Tipo de vivienda",
+    casa_pisos = "Vivienda de >1 piso",
+    casa_piso_dormir = "Piso donde duerme",
+    cuarto_ventanas = "Dormitorio con ventana",
+    cuarto_ventanas_lugar = "Orientación de ventana",
+    ventanas_abrir = "Apertura de ventanas (día)",
+    ventanas_dormir = "Estado de ventana al dormir",
+    cuarto_cortinas = "Cortinas en dormitorio",
+    cuarto_alfombra = "Alfombra en dormitorio",
+    mascota = "Tenencia de mascotas",
+    mascota_casa = "Mascota duerme dentro de casa",
+    mascota_cuarto = "Mascota duerme en dormitorio",
+    casa_cucarachas = "Presencia de cucarachas",
+    casa_ratas = "Presencia de roedores",
+    casa_humedad = "Humedad en vivienda",
+    casa_moho = "Moho visible en vivienda",
+    combustible_cocinar = "Combustible para cocinar",
+    humo_cocinar = "Acumulación de humo al cocinar",
+    barrio = "Satisfacción con el barrio",
+    barrio_seguro = "Percepción de seguridad diurna",
+    calles_polvo = "Calles sin asfaltar/polvo",
+    calle_construcciones = "Obras/construcciones cercanas",
+    calle_negocios = "Comercios emisores cercanos",
+    calle_humo = "Frecuencia de humo/polvo externo",
+    calle_humo_momento = "Horario de mayor contaminación",
+    calle_humo_momento_2 = "Molestia por humo/polvo externo",
+    casa_fuma = "Tabaquismo intradomiciliario",
+    casa_humo_semana = "Exposición a humo de tabaco (7d)",
+
+    # Módulos 9 a 11: Salud mental, nutrición y actividad física
+    phq9_p1 = "PHQ-9: Ánimo deprimido/irritable",
+    phq9_p2 = "PHQ-9: Anhedonia",
+    phq9_p3 = "PHQ-9: Alteración del sueño",
+    phq9_p4 = "PHQ-9: Alteración del apetito",
+    phq9_p5 = "PHQ-9: Fatiga/poca energía",
+    phq9_p6 = "PHQ-9: Sentimiento de fracaso",
+    phq9_p7 = "PHQ-9: Dificultad de concentración",
+    phq9_p8 = "PHQ-9: Alteración psicomotora",
+    phq9_p9 = "PHQ-9: Ideación suicida/autolesión",
+    PHQ_9 = "Puntaje PHQ-9",
+    depresion = "Severidad de depresión (PHQ-9)",
+    depresion_alt = "Severidad de depresión (colapsada)",
+    sintomas_ansiedad_1_v3 = "Ansiedad: Terror/miedo repentino",
+    sintomas_ansiedad_2_v3 = "Ansiedad: Nerviosismo/preocupación",
+    sintomas_ansiedad_3_v3 = "Ansiedad: Pensamientos catastróficos",
+    sintomas_ansiedad_4_v3 = "Ansiedad: Síntomas autonómicos",
+    sintomas_ansiedad_5_v3 = "Ansiedad: Tensión muscular/inquietud",
+    sintomas_ansiedad_6_v3 = "Ansiedad: Evitación de situaciones",
+    sintomas_ansiedad_7_v3 = "Ansiedad: Retiro/baja participación",
+    sintomas_ansiedad_8_v3 = "Ansiedad: Indecisión/postergación",
+    sintomas_ansiedad_9_v3 = "Ansiedad: Búsqueda de reaseguro",
+    sintomas_ansiedad_10_v3 = "Ansiedad: Necesidad de apoyo/sustancias",
+    ansiedad_raw = "Puntaje bruto ansiedad (0-40)",
+    ansiedad_apa_mean = "Puntaje promedio ansiedad (DSM-5)",
+    ansiedad = "Severidad de ansiedad (DSM-5)",
+    ansiedad_alt = "Severidad de ansiedad (colapsada)",
+    ahfc_p1 = "AHFC: Almuerzo bajo en grasa",
+    ahfc_p2 = "AHFC: Evita frituras",
+    ahfc_p3 = "AHFC: Consume postres",
+    ahfc_p4 = "AHFC: ≥1 fruta diaria",
+    ahfc_p5 = "AHFC: Controla ingesta de grasa",
+    ahfc_p6 = "AHFC: Snacks bajos en grasa",
+    ahfc_p7 = "AHFC: Evita embutidos/hamburguesas",
+    ahfc_p8 = "AHFC: Compra dulces/tortas",
+    ahfc_p9 = "AHFC: Controla ingesta de azúcar",
+    ahfc_p10 = "AHFC: ≥1 verdura/ensalada diaria",
+    ahfc_p11 = "AHFC: Postre bajo en grasa en casa",
+    ahfc_p12 = "AHFC: Rara vez comida para llevar",
+    ahfc_p13 = "AHFC: Consumo alto frutas/verduras",
+    ahfc_p14 = "AHFC: Dulces/snacks entre comidas",
+    ahfc_p15 = "AHFC: Verdura/ensalada en la cena",
+    ahfc_p16 = "AHFC: Gaseosa dietética",
+    ahfc_p17 = "AHFC: Poca mantequilla/margarina",
+    ahfc_p18 = "AHFC: Chocolate/galletas en lonchera",
+    ahfc_p19 = "AHFC: Fruta como snack",
+    ahfc_p20 = "AHFC: Postre saludable en restaurante",
+    ahfc_p21 = "AHFC: Añade crema a postres",
+    ahfc_p22 = "AHFC: ≥3 porciones de fruta/día",
+    ahfc_p23 = "AHFC: Intención de dieta saludable",
+    afhc_score = "Puntaje AFHC",
+    categoria_afhc = "Hábitos alimentarios (AFHC)",
+    paqc_item1_p1 = "PAQ-C: Correr/trotar",
+    paqc_item1_p2 = "PAQ-C: Ciclismo",
+    paqc_item1_p3 = "PAQ-C: Patinar/skate",
+    paqc_item1_p4 = "PAQ-C: Saltar soga",
+    paqc_item1_p5 = "PAQ-C: Caminata rápida",
+    paqc_item1_p6 = "PAQ-C: Natación",
+    paqc_item1_p7 = "PAQ-C: Baile/danza",
+    paqc_item1_p8 = "PAQ-C: Fútbol",
+    paqc_item1_p9 = "PAQ-C: Vóley",
+    paqc_item1_p10 = "PAQ-C: Básquet",
+    paqc_item1_p11 = "PAQ-C: Gimnasia/fuerza",
+    paqc_item1_p12 = "PAQ-C: Otro ejercicio vigoroso",
+    paqc_item2 = "PAQ-C: Actividad en educación física",
+    paqc_item3 = "PAQ-C: Actividad en recreo",
+    paqc_item4 = "PAQ-C: Actividad en almuerzo",
+    paqc_item5 = "PAQ-C: Deporte después del colegio",
+    paqc_item6 = "PAQ-C: Deporte en tardes (7d)",
+    paqc_item7 = "PAQ-C: Deporte fin de semana",
+    paqc_item8 = "PAQ-C: Nivel general de actividad (7d)",
+    paqc_item9_lunes = "PAQ-C: Actividad Lunes",
+    paqc_item9_martes = "PAQ-C: Actividad Martes",
+    paqc_item9_miercoles = "PAQ-C: Actividad Miércoles",
+    paqc_item9_jueves = "PAQ-C: Actividad Jueves",
+    paqc_item9_viernes = "PAQ-C: Actividad Viernes",
+    paqc_item9_sabado = "PAQ-C: Actividad Sábado",
+    paqc_item9_domingo = "PAQ-C: Actividad Domingo",
+    paqc_item10 = "PAQ-C: Enfermedad/limitación (7d)",
+    paqc_item10_motivo = "PAQ-C: Motivo de limitación",
+    paqc_final_score = "Puntaje PAQ-C",
+    paqc_dx = "Nivel de actividad física (PAQ-C)",
+    encuestador_saludmental_v3 = "Encuestador (salud mental)",
+    comentario_saludmental_v2 = "Observaciones (salud mental)",
+
+    # Módulos 12 a 13: Violencia escolar y doméstica
+    ebipq_victim1 = "EBIPQ Víctima: Agresión física",
+    ebipq_victim2 = "EBIPQ Víctima: Insultos",
+    ebipq_victim3 = "EBIPQ Víctima: Ofensas a terceros",
+    ebipq_victim4 = "EBIPQ Víctima: Amenazas",
+    ebipq_victim5 = "EBIPQ Víctima: Robo/daño de objetos",
+    ebipq_victim6 = "EBIPQ Víctima: Exclusión social",
+    ebipq_victim7 = "EBIPQ Víctima: Rumores",
+    ebipq_agresion1 = "EBIPQ Agresor: Agresión física",
+    ebipq_agresion2 = "EBIPQ Agresor: Insultos",
+    ebipq_agresion3 = "EBIPQ Agresor: Ofensas a terceros",
+    ebipq_agresion4 = "EBIPQ Agresor: Amenazas",
+    ebipq_agresion5 = "EBIPQ Agresor: Robo/daño de objetos",
+    ebipq_agresion6 = "EBIPQ Agresor: Exclusión social",
+    ebipq_agresion7 = "EBIPQ Agresor: Rumores",
+    ebipq_victimizacion_score = "Puntaje EBIPQ Victimización",
+    ebipq_agresion_score = "Puntaje EBIPQ Agresión",
+    paqc_item1_p1_v2 = "Violencia hogar: Testigo golpe",
+    paqc_item1_p2_v2 = "Violencia hogar: Víctima golpe",
+    paqc_item1_p3_v2 = "Violencia hogar: Testigo amenaza",
+    paqc_item1_p4_v2 = "Violencia hogar: Víctima amenaza",
+    paqc_item1_p5_v2 = "Violencia hogar: Testigo insulto",
+    paqc_item1_p6_v2 = "Violencia hogar: Víctima insulto",
+    violencia_hogar_score = "Puntaje Violencia Hogar",
+    encuestador_saludmental_v3_v2 = "Encuestador (violencia)",
+    comentario_saludmental_v2_v2 = "Observaciones (violencia)",
+
+    # Módulo 14: Antropometría y VO2 max
+    peso1 = "Peso 1 (kg)",
+    peso2 = "Peso 2 (kg)",
+    peso3 = "Peso 3 (kg)",
+    peso_kg = "Peso promedio (kg)",
+    talla1 = "Talla 1 (cm)",
+    talla2 = "Talla 2 (cm)",
+    talla3 = "Talla 3 (cm)",
+    talla_cm = "Talla promedio (cm)",
+    talla_m = "Talla promedio (m)",
+    talla_sentado = "Talla sentado (cm)",
+    imc = "IMC (kg/m²)",
+    zbfa_dx = "IMC para la edad (OMS)",
+    zbfa_exceso = "Estado nutricional (OMS)",
+    zhfa_dx = "Talla para la edad (OMS)",
+    indice_ponderal = "Índice ponderal (kg/m³)",
+    pliegue_triceps = "Pliegue tricipital (mm)",
+    pliegue_subescapular = "Pliegue subescapular (mm)",
+    pliegue_pantorrilla = "Pliegue pantorrilla (mm)",
+    perimetro_cuello = "Perímetro cuello (cm)",
+    perimetro_cintura1 = "Perímetro cintura 1 (cm)",
+    perimetro_cintura2 = "Perímetro cintura 2 (cm)",
+    perimetro_cintura3 = "Perímetro cintura 3 (cm)",
+    perimetro_cintura = "Perímetro cintura promedio (cm)",
+    perimetro_cadera1 = "Perímetro cadera 1 (cm)",
+    perimetro_cadera2 = "Perímetro cadera 2 (cm)",
+    perimetro_cadera3 = "Perímetro cadera 3 (cm)",
+    perimetro_cadera_prom = "Perímetro cadera promedio (cm)",
+    perimetro_cadera = "Perímetro pantorrilla (cm)",
+    indice_cintura_talla = "Índice cintura-talla (ICT)",
+    indice_cintura_cadera = "Índice cintura-cadera (ICC)",
+    masa_grasa_corporal_bio = "Masa grasa corporal bioimpedancia (%)",
+    grasa_boileau = "%GC Boileau",
+    grasa_slaughter = "%GC Slaughter",
+    grasa_deurenberg = "%GC Deurenberg",
+    grasa_ict = "%GC Urra (ICT)",
+    grasa_ip = "%GC Urra (IP)",
+    RFMp = "RFMp (%)",
+    absi = "Índice de forma corporal (ABSI)",
+    vo2max_3min = "FC final test 3 min (bpm)",
+    vo2max_sato2_3min = "SaO₂ final test 3 min (%)",
+    dinamometria1 = "Dinamometría 1 (kg)",
+    dinamometria2 = "Dinamometría 2 (kg)",
+    dinamometria3 = "Dinamometría 3 (kg)",
+    dinamometria_max = "Dinamometría máxima registrada (kg)",
+    dinamometria = "Dinamometría máxima (kg)",
+    encuestador_antropometria_v2 = "Encuestador (antropometría)",
+    comentario_antropometria_v2 = "Observaciones (antropometría)",
+
+    # Módulo 15: Presión arterial
+    pas_toma1 = "PAS 1 (mmHg)",
+    pas_toma2 = "PAS 2 (mmHg)",
+    pas_toma3 = "PAS 3 (mmHg)",
+    PAS = "PAS media (mmHg)",
+    pad_toma1 = "PAD 1 (mmHg)",
+    pad_toma2 = "PAD 2 (mmHg)",
+    pad_toma3 = "PAD 3 (mmHg)",
+    PAD = "PAD media (mmHg)",
+    bpm_toma1 = "FC 1 (bpm)",
+    bpm_toma2 = "FC 2 (bpm)",
+    bpm_toma3 = "FC 3 (bpm)",
+    pulso = "FC media (bpm)",
+    bp_category = "Riesgo cardiovascular (PA)",
+    encuestador_parterial_v2 = "Encuestador (presión arterial)",
+    comentario_parterial_v2 = "Observaciones (presión arterial)",
+
+    # Módulo 16: Biomarcadores
+    desayuno = "Estado de ayuno",
+    colesterol_total_cohorte = "Colesterol total crudo (mg/dL)",
+    hdl_colesterol_cohorte = "Colesterol HDL crudo (mg/dL)",
+    ldl_colesterol_cohorte = "Colesterol LDL crudo (mg/dL)",
+    trigliceridos_cohorte = "Triglicéridos crudo (mg/dL)",
+    glucosa_cohorte = "Glucosa crudo (mg/dL)",
+    glucosa = "Glucosa (mg/dL)",
+    colesterol_total = "Colesterol total (mg/dL)",
+    hdl_colesterol = "Colesterol HDL (mg/dL)",
+    ldl_colesterol_directo = "Colesterol LDL directo (mg/dL)",
+    LDL_friedewald = "Colesterol LDL Friedewald (mg/dL)",
+    LDL_final = "Colesterol LDL final (mg/dL)",
+    trigliceridos = "Triglicéridos (mg/dL)",
+    TyG = "Índice TyG",
+    VAI = "Índice VAI",
+    TG_HDL_ratio = "Relación TG/HDL",
+    riesgo_aterogenico = "Dislipidemia aterogénica",
+    metabolic_health = "Salud metabólica (WGOC)",
+    sindrome_metabolico = "Síndrome metabólico (IDF)",
+    encuestador_biomarcadores_v2 = "Encuestador (biomarcadores)",
+    comentario_biomarcadores_v2 = "Observaciones (biomarcadores)",
+
+    # Módulo 17: Asma, rinitis, eczema y FeNO
+    sens_pteronyssinus = "Prick: D. pteronyssinus",
+    sens_farinae = "Prick: D. farinae",
+    sens_destructor = "Prick: L. destructor",
+    sens_tropicalis = "Prick: B. tropicalis",
+    sens_arcuatus = "Prick: C. arcuatus",
+    sens_alternata = "Prick: A. alternata",
+    sens_herbarum = "Prick: C. herbarum",
+    sens_fumigatus = "Prick: A. fumigatus",
+    sens_notatum = "Prick: P. notatum",
+    sens_grasses = "Prick: Mezcla de pastos",
+    sens_vulgaris = "Prick: Artemisia vulgaris",
+    sens_ambrosia = "Prick: Ambrosia",
+    sens_perro = "Prick: Epitelio de perro",
+    sens_gato = "Prick: Epitelio de gato",
+    sens_germanica = "Prick: B. germanica",
+    sens_americana = "Prick: P. americana",
+    sens_olivo = "Prick: Olivo",
+    alergia_acaros_polvo = "Sensibilización a ácaros",
+    alergia_hongos = "Sensibilización a hongos",
+    alergia_mascotas = "Sensibilización a mascotas",
+    alergia_cucarachas = "Sensibilización a cucarachas",
+    alergia_polenes = "Sensibilización a pólenes",
+    severidad_asma_med = "Severidad clínica del asma",
+    severidad_rinitis_med = "Severidad clínica de rinitis",
+    isaac_asma_p1 = "ISAAC Asma: Sibilancias alguna vez",
+    isaac_asma_p2 = "ISAAC Asma: Sibilancias (12m)",
+    isaac_asma_p3 = "ISAAC Asma: N° ataques sibilancias (12m)",
+    isaac_asma_p4 = "ISAAC Asma: Despertar por sibilancias (12m)",
+    isaac_asma_p5 = "ISAAC Asma: Limitación del habla (12m)",
+    isaac_asma_p6 = "ISAAC Asma: Diagnóstico médico",
+    isaac_asma_p7 = "ISAAC Asma: Sibilancias por ejercicio (12m)",
+    isaac_asma_p8 = "ISAAC Asma: Tos seca nocturna (12m)",
+    isaac_rinitis_p1 = "ISAAC Rinitis: Síntomas nasales alguna vez",
+    isaac_rinitis_p2 = "ISAAC Rinitis: Síntomas nasales (12m)",
+    isaac_rinitis_p3 = "ISAAC Rinitis: Meses con síntomas/año",
+    isaac_rinitis_p4 = "ISAAC Rinitis: Limitación de actividades",
+    isaac_rinitis_p5 = "ISAAC Rinitis: Rinoconjuntivitis (12m)",
+    isaac_rinitis_p6 = "ISAAC Rinitis: Diagnóstico médico",
+    isaac_dermatitis_p1 = "ISAAC Eczema: Erupción pruriginosa alguna vez",
+    isaac_dermatitis_p2 = "ISAAC Eczema: Erupción pruriginosa (12m)",
+    isaac_dermatitis_p3 = "ISAAC Eczema: Localización típica (12m)",
+    isaac_dermatitis_p4 = "ISAAC Eczema: Remisión completa (12m)",
+    isaac_dermatitis_p5 = "ISAAC Eczema: Alteración del sueño (12m)",
+    isaac_dermatitis_p6 = "ISAAC Eczema: Diagnóstico médico",
+    feno_cohorte = "FeNO crudo (ppb)",
+    feno = "FeNO (ppb)",
+    encuestador_alergias_v2 = "Encuestador (alergias)",
+    comentario_alergias_v2 = "Observaciones (alergias)"
+  )
+
+saveRDS(data_clear, here("data", "data_shiny_r0.rds"))
+```
+
+## Summarise the missingness in each variable
+
+```{r export-resumen-miss}
+resumen_miss <- miss_var_summary(data_clear)
+
+write_xlsx(
+  resumen_miss,
+  path = here("report_sources", "resumen_na.xlsx")
+)
+```
+
+## Subconjunto Colegio Peruano Suizo
+
+```{r}
+# Extraer los nombres de las variables con 100% de NA
+vars_vacias <- miss_var_summary(data_clear) |>
+  filter(pct_miss == 100) |>
+  pull(variable)
+
+# Eliminarlas y filtrar por Colegio Peruano Suizo - Comas
+data_limpia <- data_clear |>
+  select(-all_of(vars_vacias))
+
+data_suizo <- data_limpia |>
+  dplyr::filter(colegio_id == "Colegio Peruano Suizo - Comas")
+```

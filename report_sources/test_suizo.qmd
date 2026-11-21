@@ -1,0 +1,549 @@
+---
+title: "Monitor de Salud Escolar"
+format:
+  dashboard:
+    orientation: rows
+    theme: simplex
+server: shiny
+---
+
+```{css}
+/* Barra superior roja estilo Simplex */
+.navbar {
+  background-color: #d9230f !important;
+  border-bottom: none !important;
+}
+.navbar .navbar-brand,
+.navbar .nav-link,
+.navbar-nav .nav-link.active {
+  color: #ffffff !important;
+}
+
+/* Barra lateral con fondo rosado suave */
+.bslib-sidebar-layout > .sidebar {
+  background-color: #f3e5e5 !important;
+  border-right: 1px solid #e2cece !important;
+}
+
+/* Botón descargar rojo */
+.btn-primary {
+  background-color: #d9230f !important;
+  border-color: #c21f0d !important;
+  color: #ffffff !important;
+}
+.btn-primary:hover {
+  background-color: #b51d0c !important;
+}
+
+/* Estilo de los value_box nativos de Quarto */
+.bslib-value-box {
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06) !important;
+  border-radius: 4px !important;
+}
+.bslib-value-box .value-box-value {
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+  color: #2c3e50 !important;
+  line-height: 1.15 !important;
+}
+.bslib-value-box .value-box-title {
+  font-size: 0.85rem !important;
+  color: #495057 !important;
+  margin-top: 4px !important;
+}
+.bslib-value-box .value-box-showcase {
+  color: #2c3e50 !important;
+  opacity: 0.85;
+}
+
+/* Tablas clínicas */
+#seccion_clinica table, #seccion_salud_mental table {
+  color: #222 !important;
+  font-size: 12.5px;
+  margin-bottom: 0;
+}
+#seccion_clinica th, #seccion_salud_mental th {
+  background-color: #f8f9fa;
+  color: #000;
+  font-weight: 700;
+}
+#seccion_clinica td, #seccion_salud_mental td {
+  padding: 5px 8px !important;
+}
+
+/* Panel responsable y abreviaturas */
+.well-responsable {
+  padding: 12px !important;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+.info-firma-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.abreviaturas-lista {
+  font-size: 11.5px;
+  color: #555;
+  line-height: 1.35;
+  padding-left: 18px;
+  margin-bottom: 6px;
+}
+```
+
+```{r}
+#| context: setup
+#| include: false
+
+library(rio)
+library(here)
+library(tidyverse)
+library(shiny)
+library(bslib)
+library(bsicons)
+library(shinyscreenshot)
+
+# Montar carpeta www para la firma médica
+shiny::addResourcePath(prefix = "www", directoryPath = here::here("report_sources", "www"))
+
+# Carga de datos procesados
+data_shiny <- readRDS(here::here("data", "data_shiny_r0.rds")) |>
+  mutate(
+    # Identificador legible evitando duplicar si id ya incluye el nombre
+    escolar_label = case_when(
+      is.na(nombre_escolar) | nombre_escolar == "" ~ as.character(id),
+      grepl(nombre_escolar, as.character(id), fixed = TRUE) ~ as.character(id),
+      TRUE ~ paste0(id, " - ", nombre_escolar)
+    ),
+    # Formatear indicadores ISAAC (1/0 -> Sí/No) para visualización clínica
+    across(
+      c(ASMA_VIDA, ASMA_ACTUAL, ASMA_SEVERA, RINITIS_ACTUAL, RINOCONJUNTIVITIS, ECZEMA_ACTUAL),
+      ~ if_else(.x == 1, "Sí", "No", missing = "No")
+    ),
+    # Formatear diagnósticos médicos y sensibilizaciones (0/1 -> No/Sí)
+    across(
+      c(
+        asma_medico, alergia_medico,
+        sens_pteronyssinus, sens_destructor, sens_tropicalis, sens_perro, sens_germanica
+      ),
+      ~ case_when(
+        .x == 1 ~ "Sí",
+        .x == 0 ~ "No",
+        TRUE ~ "No evaluado"
+      )
+    )
+  ) |>
+  dplyr::select(
+    # ID y sociodemográficos
+    id, escolar_label, nombre_escolar, colegio_id.factor, sexo_factor, edad_anios,
+    
+    # Salud mental y estilo de vida
+    PHQ_9, depresion, ansiedad_apa_mean, ansiedad, afhc_score, categoria_afhc,
+    paqc_final_score, paqc_dx, dinamometria,
+    
+    # Alergias y Prick Test
+    sens_pteronyssinus, sens_destructor, sens_tropicalis, sens_perro, sens_germanica,
+    asma_medico, alergia_medico, feno,
+    
+    # ISAAC
+    ASMA_VIDA, ASMA_ACTUAL, ASMA_SEVERA, RINITIS_ACTUAL, RINOCONJUNTIVITIS, ECZEMA_ACTUAL,
+    
+    # Biomarcadores y cardiometabólico
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, LDL_final,
+    PAS, PAD, pulso, metabolic_health, TG_LDL_dx, bp_category,
+    riesgo_aterogenico, dyslipidemia_algorithm, TG_HDL_ratio, TyG,
+    TyG_IR, sindrome_metabolico, VAI_sindrome_metabolico,
+    
+    # Antropometría
+    peso_kg, talla_m, imc, zbfa_dx, zhfa_dx, grasa_ip, VAI,
+    indice_cintura_cadera, indice_cintura_talla, WHR_cardio, absi
+  ) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
+```
+
+# Panel Principal {icon="fa-dashboard"}
+
+## {.sidebar width="260px"}
+
+### Selección del escolar
+
+```{r}
+selectInput(
+  "nino_seleccionado",
+  label = "Seleccione el nombre del escolar:",
+  choices = sort(unique(data_shiny$escolar_label))
+)
+
+hr()
+
+h5(strong("Exportar Resultados"))
+p(
+  HTML(paste0(icon("info-circle"), " Descargue un informe detallado para entregar a los padres.")),
+  style = "color: #2c3e50; font-size: 13px; margin-bottom: 12px; line-height: 1.4;"
+)
+uiOutput("botones_captura_ui")
+uiOutput("dynamic_vbox_css")
+```
+
+## Row {height="135px"}
+
+```{r}
+bslib::value_box(
+  id = "vbox_met",
+  title = "Salud metabólica (WGOC)",
+  value = textOutput("val_metabolica", inline = TRUE),
+  showcase = bsicons::bs_icon("person-check-fill", size = "2.6rem"),
+  showcase_layout = "top right",
+  theme = bslib::value_box_theme(bg = "#d8ebd8", fg = "#2c3e50")
+)
+```
+
+```{r}
+bslib::value_box(
+  id = "vbox_cv",
+  title = "Salud cardiovascular (NHLBI/CDC/AAP)",
+  value = textOutput("val_cardiovascular", inline = TRUE),
+  showcase = bsicons::bs_icon("heart-pulse-fill", size = "2.6rem"),
+  showcase_layout = "top right",
+  theme = bslib::value_box_theme(bg = "#d8ebd8", fg = "#2c3e50")
+)
+```
+
+```{r}
+bslib::value_box(
+  id = "vbox_atero",
+  title = "Riesgo cardiometabólico (Dislipidemia aterogénica)",
+  value = textOutput("val_aterogenico", inline = TRUE),
+  showcase = bsicons::bs_icon("eyedropper", size = "2.6rem"),
+  showcase_layout = "top right",
+  theme = bslib::value_box_theme(bg = "#d8ebd8", fg = "#2c3e50")
+)
+```
+
+```{r}
+bslib::value_box(
+  id = "vbox_sm",
+  title = "Síndrome metabólico (IDF)",
+  value = textOutput("val_sindrome", inline = TRUE),
+  showcase = bsicons::bs_icon("droplet-fill", size = "2.6rem"),
+  showcase_layout = "top right",
+  theme = bslib::value_box_theme(bg = "#d8ebd8", fg = "#2c3e50")
+)
+```
+
+## Row
+
+### **Salud metabólica y cardiovascular**
+
+```{r}
+div(
+  id = "seccion_clinica",
+  tableOutput("tabla_clinica")
+)
+```
+
+### **Salud mental y alergias**
+
+```{r}
+div(
+  id = "seccion_salud_mental",
+  tableOutput("tabla_salud_mental")
+)
+```
+
+### **Responsable**
+
+```{r}
+div(
+  id = "seccion_responsable",
+  class = "well-responsable",
+  div(
+    class = "info-firma-grid",
+    div(
+      style = "flex: 1;",
+      h6(strong("Información de consulta"), style = "margin-bottom: 6px;"),
+      p(strong("Fecha: "), format(Sys.Date(), "%d/%m/%Y"), style = "font-size: 12.5px; margin-bottom: 6px;"),
+      hr(style = "margin: 6px 0;"),
+      p(style = "font-size: 12.5px; margin-bottom: 2px;", "MD. Ana Lucia Alcántara Diaz"),
+      p(style = "font-size: 12.5px; margin-bottom: 2px;", "CMP: 101709"),
+      p(style = "font-size: 12.5px; margin-bottom: 0;", "Email: ana.alcantara.d@upch.pe")
+    ),
+    div(
+      style = "width: 145px; text-align: center;",
+      p(strong("Firma del especialista:"), style = "font-size: 12.5px; margin-bottom: 4px;"),
+      uiOutput("firma_medico")
+    )
+  ),
+  hr(style = "margin: 8px 0;"),
+  p(strong("Abreviaturas:"), style = "font-size: 12.5px; margin-bottom: 4px;"),
+  tags$ul(
+    class = "abreviaturas-lista",
+    tags$li(strong("IMC:"), " Índice de Masa Corporal"),
+    tags$li(strong("OMS:"), " Organización Mundial de la Salud"),
+    tags$li(strong("HDL-c:"), " Lipoproteínas de Alta Densidad"),
+    tags$li(strong("LDL-c:"), " Lipoproteína de Baja Densidad"),
+    tags$li(strong("TG:"), " Triglicéridos Totales"),
+    tags$li(strong("NHLBI:"), " National Heart, Lung, and Blood Institute"),
+    tags$li(strong("CDC:"), " Centers for Disease Control and Prevention"),
+    tags$li(strong("PHQ-9:"), " Patient Health Questionnaire-9"),
+    tags$li(strong("APA DSM-5:"), " Escala de Severidad de Ansiedad Generalizada (Nivel 2)"),
+    tags$li(strong("AFHC:"), " Adolescent Food Habits Checklist"),
+    tags$li(strong("PAQ-C:"), " Physical Activity Questionnaire for Older Children"),
+    tags$li(strong("ISAAC:"), " International Study of Asthma and Allergies in Childhood"),
+    tags$li(strong("WGOC:"), " Working Group on Obesity in China"),
+    tags$li(strong("AAP:"), " American Academy of Pediatrics"),
+    tags$li(strong("IDF:"), " International Diabetes Federation"),
+    tags$li(strong("mmHg:"), " Milímetros de mercurio")
+  ),
+  hr(style = "margin: 6px 0;"),
+  tags$p(
+    style = "font-size: 11.5px; color: #d9534f; font-style: italic; margin-bottom: 4px;",
+    "Los valores menores a las ",
+    strong("referencias"),
+    " suelen ser normales; aquellos mayores podrían indicar un desorden metabólico."
+  ),
+  hr(style = "margin: 6px 0;"),
+  tags$p(
+    style = "font-size: 11px; margin-bottom: 0; line-height: 1.35;",
+    "Se recomienda que, ante cualquier indicador de salud cardiometabólica que supere los valores de referencia establecidos, el escolar sea derivado para una evaluación especializada por pediatría, nutrición, endocrinología o médico general. Como medida inicial, se sugiere implementar pautas nutricionales que promuevan la salud cardiovascular mediante un aporte de grasas totales de entre el 25-30% de las calorías diarias, con un aporte de grasas saturadas entre 8-10% (NHLBI)."
+  )
+)
+```
+
+```{r}
+#| context: server
+
+# Filtrar registro seleccionado
+datos_alumno <- reactive({
+  req(input$nino_seleccionado)
+  data_shiny |>
+    dplyr::filter(escolar_label == input$nino_seleccionado) |>
+    dplyr::slice(1)
+})
+
+# Botón de captura de pantalla
+output$botones_captura_ui <- renderUI({
+  d <- datos_alumno()
+  nombre_archivo <- gsub("[^A-Za-z0-9_-]", "_", d$escolar_label)
+
+  shinyscreenshot::screenshotButton(
+    label = "Descargar",
+    filename = paste0("Reporte_", nombre_archivo, "_", Sys.Date()),
+    scale = 3,
+    class = "btn-primary",
+    style = "width: 100%; margin-bottom: 10px; font-weight: bold;"
+  )
+})
+
+# Firma del especialista
+output$firma_medico <- renderUI({
+  tags$img(
+    src = "www/firma_medico.png",
+    height = "85px",
+    alt = "Firma no encontrada",
+    style = "display: block; margin-left: auto; margin-right: auto; border: 1px solid #eee; background: #fff; padding: 2px;"
+  )
+})
+
+# Colores dinámicos para las 4 tarjetas según diagnóstico del escolar
+output$dynamic_vbox_css <- renderUI({
+  d <- datos_alumno()
+
+  get_bg <- function(val, bad_val, good_val) {
+    val <- as.character(val)
+    dplyr::case_when(
+      val == bad_val  ~ "#edd8da", # Rojo/Rosa pastel
+      val == good_val ~ "#d8ebd8", # Verde pastel
+      TRUE            ~ "#d1ecf1"  # Azul pastel (Sin dato)
+    )
+  }
+
+  bg_met   <- get_bg(d$metabolic_health, "No saludable", "Saludable")
+  bg_cv    <- get_bg(d$bp_category, "Elevada", "Normal")
+  bg_atero <- get_bg(d$riesgo_aterogenico, "Riesgo", "Normal")
+  bg_sm    <- get_bg(d$sindrome_metabolico, "Sí", "No")
+
+  tags$style(HTML(sprintf(
+    "
+    #vbox_met   { background-color: %s !important; }
+    #vbox_cv    { background-color: %s !important; }
+    #vbox_atero { background-color: %s !important; }
+    #vbox_sm    { background-color: %s !important; }
+    ",
+    bg_met, bg_cv, bg_atero, bg_sm
+  )))
+})
+
+# Textos dinámicos de los 4 value_box
+output$val_metabolica <- renderText({
+  val <- as.character(datos_alumno()$metabolic_health)
+  ifelse(is.na(val), "Sin dato", val)
+})
+
+output$val_cardiovascular <- renderText({
+  val <- as.character(datos_alumno()$bp_category)
+  ifelse(is.na(val), "Sin dato", val)
+})
+
+output$val_aterogenico <- renderText({
+  val <- as.character(datos_alumno()$riesgo_aterogenico)
+  ifelse(is.na(val), "Sin dato", val)
+})
+
+output$val_sindrome <- renderText({
+  val <- as.character(datos_alumno()$sindrome_metabolico)
+  ifelse(is.na(val), "Sin dato", val)
+})
+
+# Tabla 1: Salud metabólica y cardiovascular
+output$tabla_clinica <- renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Nombres y apellidos",
+      "Colegio",
+      "Sexo",
+      "Edad (años)",
+      "Peso (Kg)",
+      "Talla (Metros)",
+      "IMC para la edad",
+      "Altura para la edad",
+      "Glucosa plasmática en ayunas (mg/dL)",
+      "Triglicéridos (mg/dL)",
+      "Colesterol Total (mg/dL)",
+      "Colesterol HDL (mg/dL)",
+      "Colesterol LDL (mg/dL)",
+      "Presión Sistólica (mmHg)",
+      "Presión Diastólica (mmHg)",
+      "Porcentaje de grasa corporal",
+      "Índice de adiposidad visceral",
+      "Índice de triglicéridos-glucosa",
+      "Índice cintura-cadera",
+      "Índice cintura-talla",
+      "Índice TG/HDL"
+    ),
+    "Resultado" = c(
+      as.character(d$escolar_label),
+      as.character(d$colegio_id.factor),
+      as.character(d$sexo_factor),
+      as.character(d$edad_anios),
+      as.character(d$peso_kg),
+      as.character(d$talla_m),
+      as.character(d$zbfa_dx),
+      as.character(d$zhfa_dx),
+      as.character(d$glucosa),
+      as.character(d$trigliceridos),
+      as.character(d$colesterol_total),
+      as.character(d$hdl_colesterol),
+      as.character(d$LDL_final),
+      as.character(d$PAS),
+      as.character(d$PAD),
+      as.character(d$grasa_ip),
+      as.character(d$VAI),
+      as.character(d$TyG),
+      as.character(d$indice_cintura_cadera),
+      as.character(d$indice_cintura_talla),
+      as.character(d$TG_HDL_ratio)
+    ),
+    "Referencia" = c(
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "-",
+      "OMS",
+      "OMS",
+      "< 100",
+      "< 90",
+      "< 170",
+      "> 45",
+      "< 110",
+      "NHLBI/CDC",
+      "NHLBI/CDC",
+      "< 30%",
+      "< 1.775",
+      "< 8.19",
+      "< 0.85",
+      "< 0.50",
+      "< 2.2"
+    ),
+    check.names = FALSE
+  )
+}, width = "100%", spacing = "s", class = "table table-hover", na = "-")
+
+# Tabla 2: Salud mental y alergias
+output$tabla_salud_mental <- renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Depresión",
+      "Ansiedad",
+      "Hábitos alimentarios para adolescentes",
+      "Actividad física del escolar",
+      "Dinamometría máxima (kg)",
+      "Alergia al polvo (D. pteronyssinus)",
+      "Alergia a Lepidoglyphus destructor (ácaro)",
+      "Alergia a Blomia tropicalis (ácaro)",
+      "Alergia al perro",
+      "Alergia a cucaracha pequeña",
+      "Diagnóstico médico de asma",
+      "Diagnóstico médico de alergia",
+      "Fracción Exhalada de Óxido Nítrico (FeNO)",
+      "Sibilancias alguna vez",
+      "Sibilancias (últimos 12 meses)",
+      "Asma con síntomas de severidad",
+      "Rinitis (últimos 12 meses)",
+      "Rinoconjuntivitis alérgica",
+      "Eczema/Dermatitis actual"
+    ),
+    "Resultado" = c(
+      as.character(d$depresion),
+      as.character(d$ansiedad),
+      as.character(d$categoria_afhc),
+      as.character(d$paqc_dx),
+      as.character(d$dinamometria),
+      as.character(d$sens_pteronyssinus),
+      as.character(d$sens_destructor),
+      as.character(d$sens_tropicalis),
+      as.character(d$sens_perro),
+      as.character(d$sens_germanica),
+      as.character(d$asma_medico),
+      as.character(d$alergia_medico),
+      as.character(d$feno),
+      as.character(d$ASMA_VIDA),
+      as.character(d$ASMA_ACTUAL),
+      as.character(d$ASMA_SEVERA),
+      as.character(d$RINITIS_ACTUAL),
+      as.character(d$RINOCONJUNTIVITIS),
+      as.character(d$ECZEMA_ACTUAL)
+    ),
+    "Puntaje" = c(
+      as.character(d$PHQ_9),
+      as.character(d$ansiedad_apa_mean),
+      as.character(d$afhc_score),
+      as.character(d$paqc_final_score),
+      "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"
+    ),
+    "Referencia" = c(
+      "PHQ-9",
+      "APA DSM-5",
+      "AFHC",
+      "PAQ-C",
+      "≥ 25",
+      "-", "-", "-", "-", "-", "-", "-",
+      "< 20 ppb",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC",
+      "ISAAC"
+    ),
+    check.names = FALSE
+  )
+}, width = "100%", spacing = "s", class = "table table-hover", na = "-")
+```

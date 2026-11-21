@@ -4,7 +4,7 @@ graphics.off()
 #Load Hmisc library
 library(Hmisc)
 #Read Data
-data=read.csv('ContaminacinAmbienta_DATA_2025-12-16_1626.csv')
+data <- import(here("data", "ContaminaciónAmbienta_DATA_2025-12-16_1626.csv"))
 #Setting Labels
 
 label(data$record_id) = "Record ID"

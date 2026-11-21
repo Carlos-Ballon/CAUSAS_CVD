@@ -1,0 +1,679 @@
+---
+title: "Monitor de Salud Escolar"
+format:
+  dashboard:
+    nav-buttons: [github]
+    github: https://github.com/Carlos-Ballon/CAUSAS_CVD
+    orientation: rows
+theme:
+   light: [sandstone, theme/custom.scss]
+   dark: [sandstone, theme/custom-dark.scss]
+server: shiny
+---
+
+```{r}
+#| label: load-packages
+#| context: setup
+#| message: false
+
+library(rio)
+library(here)
+library(tidyverse)
+library(shiny)
+library(bslib)
+library(bsicons)
+library(shinyscreenshot)
+theme_set(theme_minimal(base_size = 24, base_family = "Atkinson Hyperlegible"))
+
+
+# Carpeta www para la firma médica
+shiny::addResourcePath(prefix = "www", directoryPath = here::here("report_sources", "www"))
+```
+
+```{r}
+#| label: load-data
+#| context: setup
+#| message: false
+
+data_shiny <- readRDS(here::here("data", "data_shiny_r0.rds"))
+```
+
+```{r}
+#| label: prep-data
+#| context: setup
+#| message: false
+
+  # Módulos
+modulos_variables <- list(
+  "Módulos 1 a 8: Salud general y ambiente" = c(
+    "id", "nombre_escolar", "colegio_id", "ciudad", "grado_escolar",
+    "edad_anios", "sexo_factor", "distrito", "tiempo_casa", "cuantos_casa",
+    "cuarto_compartido", "cuarto_cuantas", "seguro_salud_cat",
+    "asma_medico", "inhalador", "falta_aire",
+    "alergia_medico", "alergia_polvo_alimentos", "alergia_especifica", "lentes",
+    "enfermedad", "enfermedad_especifica", "medicamentos", "medicamento_especifico",
+    "hospitalizacion_12m", "emergencia_12m", "faltar_colegio_12m",
+    "problema_correr", "problema_correr_especifico",
+    "hipertension_familia", "hipertension_convive",
+    "diabetes_familia", "diabetes_convive",
+    "ayuda_enfermo", "ayuda_frecuencia", "ayuda_tiempo",
+    "crianza", "problemas_adulto_hablar", "preguntas_estudios", "comida_adulto",
+    "casa_colegio_ida", "otro_transporte", "otro_transporte_2", "ida_tiempo",
+    "colegio_casa_vuelta", "vuelta_tiempo", "ida_vuelta_contaminada",
+    "area_verde_visita", "area_verde_semana", "area_verde_tiempo",
+    "casa_tipo", "casa_pisos", "casa_piso_dormir",
+    "cuarto_ventanas", "cuarto_ventanas_lugar", "ventanas_abrir", "ventanas_dormir",
+    "cuarto_cortinas", "cuarto_alfombra",
+    "mascota", "mascota_casa", "mascota_cuarto",
+    "casa_cucarachas", "casa_ratas", "casa_humedad", "casa_moho",
+    "combustible_cocinar", "humo_cocinar",
+    "barrio", "barrio_seguro", "calles_polvo",
+    "calle_construcciones", "calle_negocios", "calle_humo",
+    "calle_humo_momento", "calle_humo_momento_2",
+    "casa_fuma", "casa_humo_semana"
+  ),
+  "Módulos 9 a 11: Salud mental, nutrición y actividad física" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "PHQ_9", "depresion", "depresion_alt",
+    "phq9_p1", "phq9_p2", "phq9_p3", "phq9_p4", "phq9_p5",
+    "phq9_p6", "phq9_p7", "phq9_p8", "phq9_p9",
+    "ansiedad_raw", "ansiedad_apa_mean", "ansiedad", "ansiedad_alt",
+    "sintomas_ansiedad_1_v3", "sintomas_ansiedad_2_v3", "sintomas_ansiedad_3_v3",
+    "sintomas_ansiedad_4_v3", "sintomas_ansiedad_5_v3", "sintomas_ansiedad_6_v3",
+    "sintomas_ansiedad_7_v3", "sintomas_ansiedad_8_v3", "sintomas_ansiedad_9_v3",
+    "sintomas_ansiedad_10_v3",
+    "afhc_score", "categoria_afhc",
+    "paqc_item1_score", "paq_item9_score", "paqc_final_score", "paqc_dx",
+    "paqc_item2", "paqc_item3", "paqc_item4", "paqc_item5",
+    "paqc_item6", "paqc_item7", "paqc_item8",
+    "paqc_item10", "paqc_item10_motivo"
+  ),
+  "Módulos 12 a 13: Violencia escolar y doméstica" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "ebipq_victimizacion_score", "ebipq_agresion_score", "violencia_hogar_score",
+    "ebipq_victim1", "ebipq_victim2", "ebipq_victim3",
+    "ebipq_victim4", "ebipq_victim5", "ebipq_victim6", "ebipq_victim7",
+    "ebipq_agresion1", "ebipq_agresion2", "ebipq_agresion3",
+    "ebipq_agresion4", "ebipq_agresion5", "ebipq_agresion6", "ebipq_agresion7",
+    "paqc_item1_p1_v2", "paqc_item1_p2_v2", "paqc_item1_p3_v2",
+    "paqc_item1_p4_v2", "paqc_item1_p5_v2", "paqc_item1_p6_v2"
+  ),
+  "Módulo 14: Antropometría y condición física" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "peso_kg", "talla_cm", "talla_m", "talla_sentado", "imc", "indice_ponderal",
+    "zbfa", "zbfa_dx", "zbfa_exceso", "zhfa", "zhfa_dx",
+    "perimetro_cuello", "perimetro_cintura", "perimetro_cadera_prom", "perimetro_pantorrilla",
+    "indice_cintura_talla", "WHtR_cat", "indice_cintura_cadera", "WHR_cardio",
+    "wc_percentile", "p90_cintura", "p95_cintura", "absi",
+    "pliegue_tricipital", "pliegue_subescapular", "pliegue_pantorrilla",
+    "masa_grasa_corporal_bio", "grasa_boileau", "masa_grasa_kg_boileau",
+    "grasa_slaughter", "masa_grasa_kg_slaughter",
+    "grasa_deurenberg", "masa_grasa_kg_deurenberg",
+    "grasa_ict", "masa_grasa_kg_ict",
+    "grasa_ip", "masa_grasa_kg_ip", "RFMp",
+    "vo2max_3min", "vo2max_sato2_3min", "dinamometria"
+  ),
+  "Módulo 15: Presión arterial" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "pas_toma1", "pas_toma2", "pas_toma3", "PAS",
+    "pad_toma1", "pad_toma2", "pad_toma3", "PAD",
+    "bpm_toma1", "bpm_toma2", "bpm_toma3", "pulso",
+    "sbp_p", "dbp_p", "p95_sbp_mmHg", "p95_dbp_mmHg",
+    "p90_bp", "p95_bp", "bp_category"
+  ),
+  "Módulo 16: Biomarcadores y riesgo cardiometabólico" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "desayuno", "glucosa", "colesterol_total", "hdl_colesterol",
+    "ldl_colesterol_directo", "LDL_friedewald", "LDL_final", "trigliceridos",
+    "colesterol_total_dx", "LDL_dx", "HDL_dx", "TG_dx", "TG_LDL_dx",
+    "dyslipidemia_algorithm", "perfil_aterogenico_dx", "riesgo_aterogenico",
+    "TyG", "TyG_IR", "VAI", "VAI_higado", "VAI_sindrome_metabolico",
+    "TyG_WC", "TyG_BMI", "TyG_WHtR", "TG_HDL_ratio",
+    "TyG_WC_q4", "TyG_BMI_q4", "TyG_WHtR_q4", "TG_HDL_ratio_q4",
+    "n_metabolic_abnormalities", "metabolic_health", "sindrome_metabolico"
+  ),
+  "Módulo 17: Asma, rinitis, eczema (ISAAC), Prick Test y FeNO" = c(
+    "id", "nombre_escolar", "colegio_id", "sexo_factor", "edad_anios",
+    "feno", "severidad_asma_med", "severidad_rinitis_med",
+    "alergia_acaros_polvo", "alergia_hongos", "alergia_mascotas",
+    "alergia_cucarachas", "alergia_polenes",
+    "sens_pteronyssinus", "sens_farinae", "sens_destructor",
+    "sens_tropicalis", "sens_arcuatus", "sens_alternata",
+    "sens_herbarum", "sens_fumigatus", "sens_notatum",
+    "sens_grasses", "sens_vulgaris", "sens_ambrosia",
+    "sens_perro", "sens_gato", "sens_germanica",
+    "sens_americana", "sens_olivo",
+    "ASMA_VIDA", "ASMA_ACTUAL", "ASMA_DIAG", "ASMA_SEVERA", "ASMA_LEVE_MOD",
+    "ASMA_EJERCICIO", "ASMA_TOS",
+    "RINITIS_VIDA", "RINITIS_ACTUAL", "RINITIS_DIAG", "RINITIS_ESPORADICA",
+    "RINITIS_INTERMITENTE", "RINITIS_PERSISTENTE", "RINITIS_MOD_SEV", "RINOCONJUNTIVITIS",
+    "ECZEMA_VIDA", "ECZEMA_ACTUAL", "ECZEMA_DIAG", "ECZEMA_TIPICO",
+    "ECZEMA_RECURRENTE", "ECZEMA_LEVE", "ECZEMA_LEVE_MOD", "ECZEMA_MODERADO", "ECZEMA_SEVERO"
+  )
+)
+
+# 2. Selección y procesamiento exclusivo para el Panel Principal (individual)
+data_panel_principal <- data_shiny  |>
+  dplyr::select(
+    # ID y sociodemográficos
+    id, nombre_escolar, colegio_id, sexo_factor, edad_anios,
+
+    # Salud mental y estilo de vida
+    PHQ_9, depresion, ansiedad_apa_mean, ansiedad, afhc_score, categoria_afhc,
+    paqc_final_score, paqc_dx, dinamometria,
+
+    # Alergias y Prick Test
+    sens_fumigatus, sens_pteronyssinus, sens_destructor, sens_tropicalis, sens_perro, sens_germanica,
+    asma_medico, alergia_medico, feno,
+
+    # ISAAC
+    ASMA_ACTUAL, ASMA_LEVE_MOD, RINITIS_ACTUAL, RINITIS_INTERMITENTE, RINITIS_PERSISTENTE,
+    RINITIS_MOD_SEV, ECZEMA_ACTUAL, ECZEMA_LEVE, ECZEMA_LEVE_MOD,
+
+    # Biomarcadores y cardiometabólico
+    glucosa, trigliceridos, hdl_colesterol, colesterol_total, LDL_final,
+    PAS, PAD, pulso, metabolic_health, TG_LDL_dx, bp_category,
+    riesgo_aterogenico, dyslipidemia_algorithm, TG_HDL_ratio, TyG,
+    TyG_IR, sindrome_metabolico, VAI_sindrome_metabolico,
+
+    # Antropometría
+    peso_kg, talla_m, imc, zbfa_dx, zhfa_dx, grasa_ip, VAI,
+    indice_cintura_cadera, indice_cintura_talla, WHR_cardio, absi
+  ) |>
+  dplyr::mutate(
+    escolar_label = dplyr::case_when(
+      is.na(nombre_escolar) | nombre_escolar == "" ~ as.character(id),
+      grepl(nombre_escolar, as.character(id), fixed = TRUE) ~ as.character(id),
+      TRUE ~ paste0(id, " - ", nombre_escolar)
+    ),
+    colegio_filtro = dplyr::if_else(
+      is.na(colegio_id),
+      "Sin colegio asignado",
+      as.character(colegio_id)
+    ),
+    dplyr::across(
+      c(
+        asma_medico, alergia_medico,
+        sens_pteronyssinus, sens_destructor, sens_tropicalis, sens_perro, sens_germanica
+      ),
+      ~ dplyr::case_when(
+        as.character(.x) %in% c("Sí", "Positivo") ~ "Sí",
+        as.character(.x) %in% c("No", "Negativo") ~ "No",
+        TRUE ~ "No evaluado"
+      )
+    ),
+    dplyr::across(where(is.numeric), \(x) round(x, 2))
+  )
+
+# 3. Selección y procesamiento exclusivo para el Panel de Análisis por Módulo
+vars_todos_modulos <- unique(unlist(modulos_variables, use.names = FALSE))
+
+data_modulos <- data_shiny  |>
+  dplyr::select(dplyr::all_of(vars_todos_modulos)) |>
+  dplyr::mutate(
+    colegio_filtro = dplyr::if_else(
+      is.na(colegio_id),
+      "Sin colegio asignado",
+      as.character(colegio_id)
+    ),
+    dplyr::across(where(is.numeric), \(x) round(x, 2))
+  )
+
+colegios_choices <- c("Todos los colegios", sort(unique(data_panel_principal$colegio_filtro)))
+```
+
+# {.sidebar}
+
+#### Filtros de selección
+
+```{r}
+selectInput(
+  "colegio_seleccionado",
+  label = "Seleccione el colegio:",
+  choices = colegios_choices,
+  selected = "Todos los colegios"
+)
+
+selectInput(
+  "nino_seleccionado",
+  label = "Seleccione el nombre del escolar:",
+  choices = sort(unique(data_panel_principal$escolar_label))
+)
+
+hr()
+
+h5(strong("Exportar Resultados"))
+p(
+  HTML(paste0(icon("info-circle"), " Descargue un informe detallado para entregar a los padres.")),
+  style = "color: #2c3e50; font-size: 13px; margin-bottom: 12px; line-height: 1.4;"
+)
+uiOutput("botones_captura_ui")
+```
+
+::: {.callout-note collapse="true"}
+## Nota clínica
+
+Los resultados presentados tienen fines de tamizaje escolar y orientación preventiva. Ante valores fuera de referencia, se sugiere evaluación médica especializada.
+
+Se recomienda que, ante cualquier indicador de salud cardiometabólica que supere los valores de referencia establecidos, el escolar sea derivado para una evaluación especializada por pediatría, nutrición, endocrinología o médico general. Como medida inicial, se sugiere implementar pautas nutricionales que promuevan la salud cardiovascular mediante un aporte de grasas totales de entre el 25-30% de las calorías diarias, con un aporte de grasas saturadas entre 8-10% (NHLBI).
+:::
+
+# Panel Principal
+
+## Row {height="20%"}
+
+```{r}
+uiOutput("vbox_metabolica")
+```
+
+```{r}
+uiOutput("vbox_cardiovascular")
+```
+
+```{r}
+uiOutput("vbox_aterogenico")
+```
+
+```{r}
+uiOutput("vbox_sindrome")
+```
+
+## Row {height="80%"}
+
+### Column {width="36%"}
+
+```{r}
+#| title: "Salud metabólica y cardiovascular"
+
+div(
+  id = "seccion_clinica",
+  tableOutput("tabla_clinica")
+)
+```
+
+### Column {width="36%"}
+
+```{r}
+#| title: "Salud mental y alergias"
+
+div(
+  id = "seccion_salud_mental",
+  tableOutput("tabla_salud_mental")
+)
+```
+
+### Column {width="28%"}
+
+```{r}
+#| title: "Responsable"
+
+div(
+  id = "seccion_responsable",
+  fluidRow(
+    column(
+      width = 6,
+      h6(strong("Información de consulta")),
+      p(strong("Fecha: "), format(Sys.Date(), "%d/%m/%Y")),
+      hr(),
+      p(style = "margin-bottom: 1px;", "MD. Ana Lucia Alcántara Diaz"),
+      p(style = "margin-bottom: 1px;", "CMP: 101709"),
+      p(style = "margin-bottom: 5px;", "Email: ana.alcantara.d@upch.pe")
+    ),
+    column(
+      width = 6,
+      p(strong("Firma del especialista:")),
+      uiOutput("firma_medico")
+    )
+  ),
+  hr(),
+  p(strong("Abreviaturas:")),
+  tags$ul(
+    tags$li(strong("IMC:"), " Índice de Masa Corporal"),
+    tags$li(strong("OMS:"), " Organización Mundial de la Salud"),
+    tags$li(strong("HDL-c:"), " Lipoproteínas de Alta Densidad"),
+    tags$li(strong("LDL-c:"), " Lipoproteína de Baja Densidad"),
+    tags$li(strong("TG:"), " Triglicéridos Totales"),
+    tags$li(strong("NHLBI:"), " National Heart, Lung, and Blood Institute"),
+    tags$li(strong("CDC:"), " Centers for Disease Control and Prevention"),
+    tags$li(strong("PHQ-9:"), " Patient Health Questionnaire-9"),
+    tags$li(strong("APA DSM-5:"), " Escala de Severidad de Ansiedad Generalizada (Nivel 2)"),
+    tags$li(strong("AFHC:"), " Adolescent Food Habits Checklist"),
+    tags$li(strong("PAQ-C:"), " Physical Activity Questionnaire for Older Children"),
+    tags$li(strong("ISAAC:"), " International Study of Asthma and Allergies in Childhood"),
+    tags$li(strong("WGOC:"), " Working Group on Obesity in China"),
+    tags$li(strong("AAP:"), " American Academy of Pediatrics"),
+    tags$li(strong("IDF:"), " International Diabetes Federation"),
+    tags$li(strong("mmHg:"), " Milímetros de mercurio")
+  ),
+  hr(),
+  tags$p(
+    style = "font-size: 12px; color: #d9534f; font-style: italic;",
+    "Los valores menores a las ",
+    strong("referencias"),
+    " suelen ser normales; aquellos mayores podrían indicar un desorden metabólico."
+  )
+)
+```
+
+```{r}
+#| label: server
+#| context: server
+
+# Actualizar dinámicamente la lista de escolares al filtrar por colegio
+observeEvent(input$colegio_seleccionado, {
+  req(input$colegio_seleccionado)
+
+  df_filtrado <- if (input$colegio_seleccionado == "Todos los colegios") {
+    data_panel_principal
+  } else {
+    data_panel_principal |> dplyr::filter(colegio_filtro == input$colegio_seleccionado)
+  }
+
+  opciones_escolares <- sort(unique(df_filtrado$escolar_label))
+
+  seleccion_actual <- if (!is.null(input$nino_seleccionado) && input$nino_seleccionado %in% opciones_escolares) {
+    input$nino_seleccionado
+  } else {
+    opciones_escolares[1]
+  }
+
+  updateSelectInput(
+    session,
+    inputId = "nino_seleccionado",
+    choices = opciones_escolares,
+    selected = seleccion_actual
+  )
+})
+
+# Datos del alumno seleccionado para el Panel Principal
+datos_alumno <- reactive({
+  req(input$nino_seleccionado)
+  data_panel_principal |>
+    dplyr::filter(escolar_label == input$nino_seleccionado) |>
+    dplyr::slice(1)
+})
+
+output$botones_captura_ui <- renderUI({
+  d <- datos_alumno()
+  nombre_archivo <- gsub("[^A-Za-z0-9_-]", "_", d$escolar_label)
+
+  tagList(
+    shinyscreenshot::screenshotButton(
+      label = "Descargar",
+      filename = paste0("Reporte_", nombre_archivo, "_", Sys.Date()),
+      scale = 3,
+      class = "btn-primary",
+      style = "width: 100%; margin-bottom: 10px; font-weight: bold;"
+    )
+  )
+})
+
+output$firma_medico <- renderUI({
+  tags$img(
+    src = "www/firma_medico.png",
+    height = "100px",
+    alt = "Firma no encontrada",
+    style = "display: block; margin-left: auto; margin-right: auto;"
+  )
+})
+
+output$vbox_metabolica <- renderUI({
+  d <- datos_alumno()
+  val <- as.character(d$metabolic_health)
+  tema <- dplyr::case_when(
+    val == "Saludable" ~ "success",
+    val == "No saludable" ~ "danger",
+    TRUE ~ "primary"
+  )
+  bslib::value_box(
+    title = "Salud metabólica (WGOC)",
+    value = ifelse(is.na(val), "Sin dato", val),
+    showcase = bsicons::bs_icon("person-check-fill"),
+    showcase_layout = "top right",
+    theme = tema
+  )
+})
+
+output$vbox_cardiovascular <- renderUI({
+  d <- datos_alumno()
+  val <- as.character(d$bp_category)
+  tema <- dplyr::case_when(
+    val == "Normal" ~ "success",
+    val == "Elevada" ~ "danger",
+    TRUE ~ "primary"
+  )
+  bslib::value_box(
+    title = "Salud cardiovascular (NHLBI/CDC/AAP)",
+    value = ifelse(is.na(val), "Sin dato", val),
+    showcase = bsicons::bs_icon("heart-pulse-fill"),
+    showcase_layout = "top right",
+    theme = tema
+  )
+})
+
+output$vbox_aterogenico <- renderUI({
+  d <- datos_alumno()
+  val <- as.character(d$riesgo_aterogenico)
+  tema <- dplyr::case_when(
+    val %in% c("Normal", "Aceptable") ~ "success",
+    val == "Riesgo" ~ "danger",
+    TRUE ~ "primary"
+  )
+  bslib::value_box(
+    title = "Riesgo cardiometabólico (Dislipidemia aterogénica)",
+    value = ifelse(is.na(val), "Sin dato", val),
+    showcase = bsicons::bs_icon("eyedropper"),
+    showcase_layout = "top right",
+    theme = tema
+  )
+})
+
+output$vbox_sindrome <- renderUI({
+  d <- datos_alumno()
+  val <- as.character(d$sindrome_metabolico)
+  tema <- dplyr::case_when(
+    val == "No" ~ "success",
+    val == "Sí" ~ "danger",
+    TRUE ~ "primary"
+  )
+  bslib::value_box(
+    title = "Síndrome metabólico (IDF)",
+    value = ifelse(is.na(val), "Sin dato", val),
+    showcase = bsicons::bs_icon("droplet-fill"),
+    showcase_layout = "top right",
+    theme = tema
+  )
+})
+
+output$tabla_clinica <- renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Nombres y apellidos",
+      "Colegio",
+      "Sexo",
+      "Edad (años)",
+      "Peso (Kg)",
+      "Talla (Metros)",
+      "IMC para la edad",
+      "Estatura para la edad",
+      "Glucosa plasmática en ayunas (mg/dL)",
+      "Triglicéridos (mg/dL)",
+      "Colesterol Total (mg/dL)",
+      "Colesterol HDL (mg/dL)",
+      "Colesterol LDL (mg/dL)",
+      "Presión Sistólica (mmHg)",
+      "Presión Diastólica (mmHg)",
+      "Porcentaje de grasa corporal",
+      "Índice de adiposidad visceral",
+      "Índice de triglicéridos-glucosa",
+      "Índice cintura-cadera",
+      "Índice cintura-talla",
+      "Índice TG/HDL"
+    ),
+    "Resultado" = c(
+      as.character(d$escolar_label),
+      as.character(d$colegio_id),
+      as.character(d$sexo_factor),
+      as.character(d$edad_anios),
+      as.character(d$peso_kg),
+      as.character(d$talla_m),
+      as.character(d$zbfa_dx),
+      as.character(d$zhfa_dx),
+      as.character(d$glucosa),
+      as.character(d$trigliceridos),
+      as.character(d$colesterol_total),
+      as.character(d$hdl_colesterol),
+      as.character(d$LDL_final),
+      as.character(d$PAS),
+      as.character(d$PAD),
+      as.character(d$grasa_ip),
+      as.character(d$VAI),
+      as.character(d$TyG),
+      as.character(d$indice_cintura_cadera),
+      as.character(d$indice_cintura_talla),
+      as.character(d$TG_HDL_ratio)
+    ),
+    "Referencia" = c(
+      "-", "-", "-", "-", "-", "-",
+      "OMS", "OMS",
+      "< 100", "< 90", "< 170", "> 45", "< 110",
+      "NHLBI/CDC", "NHLBI/CDC",
+      "< 30%", "< 1.775", "< 8.19", "< 0.85", "< 0.50", "< 2.2"
+    ),
+    check.names = FALSE
+  )
+}, width = "100%", spacing = "s", class = "table table-hover", na = "-")
+
+output$tabla_salud_mental <- renderTable({
+  d <- datos_alumno()
+  data.frame(
+    "Indicador" = c(
+      "Depresión",
+      "Ansiedad",
+      "Hábitos alimentarios para adolescentes",
+      "Actividad física del escolar",
+      "Dinamometría máxima (kg)",
+      "Alergia al polvo (D. pteronyssinus)",
+      "Alergia a Lepidoglyphus destructor (ácaro)",
+      "Alergia a Blomia tropicalis (ácaro)",
+      "Alergia al perro",
+      "Alergia a cucaracha pequeña",
+      "Diagnóstico médico de asma",
+      "Diagnóstico médico de alergia",
+      "Fracción Exhalada de Óxido Nítrico (FeNO)",
+      "Asma activa (Actual)",
+      "Asma leve o moderada",
+      "Rinitis activa (Actual)",
+      "Rinitis intermitente",
+      "Rinitis persistente",
+      "Rinitis moderada o severa",
+      "Eczema activa (Actual)",
+      "Eczema leve",
+      "Eczema leve o moderado"
+    ),
+    "Resultado" = c(
+      as.character(d$depresion),
+      as.character(d$ansiedad),
+      as.character(d$categoria_afhc),
+      as.character(d$paqc_dx),
+      as.character(d$dinamometria),
+      as.character(d$sens_pteronyssinus),
+      as.character(d$sens_destructor),
+      as.character(d$sens_tropicalis),
+      as.character(d$sens_perro),
+      as.character(d$sens_germanica),
+      as.character(d$asma_medico),
+      as.character(d$alergia_medico),
+      as.character(d$feno),
+      as.character(d$ASMA_ACTUAL),
+      as.character(d$ASMA_LEVE_MOD),
+      as.character(d$RINITIS_ACTUAL),
+      as.character(d$RINITIS_INTERMITENTE),
+      as.character(d$RINITIS_PERSISTENTE),
+      as.character(d$RINITIS_MOD_SEV),
+      as.character(d$ECZEMA_ACTUAL),
+      as.character(d$ECZEMA_LEVE),
+      as.character(d$ECZEMA_LEVE_MOD)
+    ),
+    "Puntaje" = c(
+      as.character(d$PHQ_9),
+      as.character(d$ansiedad_apa_mean),
+      as.character(d$afhc_score),
+      as.character(d$paqc_final_score),
+      rep("-", 18)
+    ),
+    "Referencia" = c(
+      "PHQ-9", "APA DSM-5", "AFHC", "PAQ-C", "≥ 25",
+      "-", "-", "-", "-", "-", "-", "-",
+      "< 20 ppb",
+      rep("ISAAC", 9)
+    ),
+    check.names = FALSE
+  )
+}, width = "100%", spacing = "s", class = "table table-hover", na = "-")
+
+# -------------------------------------------------------------------------
+# SERVIDOR PARA EL NUEVO HEADING: ANÁLISIS DE DATOS POR MÓDULO
+# -------------------------------------------------------------------------
+
+datos_modulo_reactivo <- reactive({
+  req(input$modulo_seleccionado, input$colegio_seleccionado)
+
+  df_base <- if (input$colegio_seleccionado == "Todos los colegios") {
+    data_modulos
+  } else {
+    data_modulos |> dplyr::filter(colegio_filtro == input$colegio_seleccionado)
+  }
+
+  vars_modulo <- modulos_variables[[input$modulo_seleccionado]]
+  df_sel <- df_base |> dplyr::select(dplyr::all_of(vars_modulo))
+
+  # Reemplazar nombres técnicos por etiquetas descriptivas cuando existan
+  etiquetas <- purrr::map_chr(vars_modulo, function(v) {
+    lbl <- attr(df_sel[[v]], "label", exact = TRUE)
+    if (!is.null(lbl) && nzchar(lbl)) lbl else v
+  })
+
+  names(df_sel) <- make.unique(etiquetas, sep = " ")
+  df_sel
+})
+
+output$resumen_modulo_ui <- renderUI({
+  df <- datos_modulo_reactivo()
+  bslib::value_box(
+    title = paste0("Registros en ", input$colegio_seleccionado),
+    value = paste0(nrow(df), " escolares | ", ncol(df), " variables"),
+    showcase = bsicons::bs_icon("table"),
+    showcase_layout = "top right",
+    theme = "info"
+  )
+})
+
+output$tabla_modulo_completa <- DT::renderDT({
+  df <- datos_modulo_reactivo()
+  DT::datatable(
+    df,
+    filter = "top",
+    rownames = FALSE,
+    extensions = "Buttons",
+    options = list(
+      dom = "Bfrtip",
+      buttons = list(
+        list(extend = "csv", text = "Descargar CSV"),
+        list(extend = "excel", text = "Descargar Excel")
+      ),
+      paging = FALSE,
+      scrollX = TRUE,
+      scrollY = "62vh",
+      scrollCollapse = TRUE,
+      language = list(
+        search = "Buscar:",
+        info = "Mostrando _TOTAL_ registros",
+        infoEmpty = "Mostrando 0 registros",
+        zeroRecords = "No se encontraron registros coincidentes"
+      )
+    )
+  )
+})
+```

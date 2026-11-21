@@ -1,5 +1,3 @@
-library(labelled)
-
 var_label(data$record_id) <- "Record ID"
 var_label(data$redcap_event_name) <- "Event Name"
 var_label(data$redcap_repeat_instrument) <- "Repeat Instrument"
@@ -206,7 +204,7 @@ var_label(data$exposoma_20_fabrica_o_planta_industrial_ejemplo_cemento_alim) <- 
 var_label(data$exposoma_20_taller_mecanico_o_de_soldadura) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Taller mecánico o de soldadura)"
 var_label(data$exposoma_20_panaderia_o_polleria) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Panadería o polleria)"
 var_label(data$exposoma_20_empresa_de_transporte_o_estacion_de_buses_camion) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Empresa de transporte o estación de buses/camiones)"
-var_label(data$exposoma_20_otra_exposoma_20_otro) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Otra {exposoma_20_otro})"
+# var_label(data$exposoma_20_otra_exposoma_20_otro) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Otra {exposoma_20_otro})"
 var_label(data$exposoma_20_unknown) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Unknown)"
 var_label(data$exposoma_20_no_information) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-No information)"
 var_label(data$exposoma_20_invalid) <- "i. Identificación de las fuentes ¿Qué tipo de empresa o industria está más cerca de su casa?  (choice<-Invalid)"
